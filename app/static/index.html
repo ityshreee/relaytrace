@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RelayTrace — evidence-linked handover</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  mark{background:#fde68a;padding:0 2px;border-radius:3px}
+  pre{white-space:pre-wrap;word-break:break-word}
+  .card{transition:box-shadow .15s}
+  .card.sel{box-shadow:0 0 0 2px #6366f1}
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+<header class="bg-white border-b sticky top-0 z-20">
+  <div class="max-w-[1500px] mx-auto px-4 py-2 flex flex-wrap items-center gap-3">
+    <div class="font-bold text-indigo-700 text-lg">RelayTrace</div>
+    <div class="text-xs text-slate-500 hidden md:block">evidence-linked knowledge handover</div>
+    <div class="flex-1"></div>
+    <label class="text-xs text-slate-500">Project
+      <select id="projSel" class="ml-1 border rounded px-2 py-1 text-sm"></select>
+    </label>
+    <label class="text-xs text-slate-500">Viewing as
+      <select id="roleSel" class="ml-1 border rounded px-2 py-1 text-sm">
+        <option value="leaver">Outgoing contributor (leaver)</option>
+        <option value="manager">Project lead / manager</option>
+        <option value="successor">Successor</option>
+      </select>
+    </label>
+    <button id="btnDemo" class="text-sm border rounded px-3 py-1 hover:bg-slate-100">New demo project</button>
+    <button id="btnUpload" class="text-sm bg-indigo-600 text-white rounded px-3 py-1 hover:bg-indigo-700">Upload exports</button>
+  </div>
+</header>
+
+<div id="toast" class="fixed top-16 right-4 z-30 hidden px-4 py-2 rounded shadow text-sm"></div>
+
+<main class="max-w-[1500px] mx-auto px-4 py-4">
+  <div id="app"></div>
+</main>
+
+<!-- upload modal -->
+<div id="modal" class="fixed inset-0 bg-black/40 z-30 hidden items-center justify-center p-4">
+  <form id="upForm" class="bg-white rounded-lg shadow-xl p-5 w-full max-w-lg space-y-3">
+    <h2 class="font-semibold text-lg">Upload project exports</h2>
+    <p class="text-xs text-slate-500">Offline files only. Secrets are masked before anything is stored. Provide at least one file.
+      No files handy? Download the sample set:
+      <a class="text-indigo-600 underline" href="/api/demo-files/github.json">github.json</a>,
+      <a class="text-indigo-600 underline" href="/api/demo-files/slack.json">slack.json</a>,
+      <a class="text-indigo-600 underline" href="/api/demo-files/jira.csv">jira.csv</a>.</p>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="text-sm">Project name<input name="name" class="mt-1 w-full border rounded px-2 py-1" value="My project"></label>
+      <label class="text-sm">Leaver's username<input name="leaver" placeholder="auto-detect if blank" class="mt-1 w-full border rounded px-2 py-1"></label>
+    </div>
+    <label class="text-sm block">GitHub export (.json)<input type="file" name="github" accept=".json" class="mt-1 block w-full text-sm"></label>
+    <label class="text-sm block">Slack export (.json)<input type="file" name="slack" accept=".json" class="mt-1 block w-full text-sm"></label>
+    <label class="text-sm block">Jira / Linear export (.csv)<input type="file" name="jira" accept=".csv" class="mt-1 block w-full text-sm"></label>
+    <div class="flex justify-end gap-2 pt-2">
+      <button type="button" id="upCancel" class="px-3 py-1 text-sm border rounded">Cancel</button>
+      <button class="px-3 py-1 text-sm bg-indigo-600 text-white rounded">Build dossier</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const S = {role: 'leaver', pid: null, data: null, selSource: null, selClaim: null, err: null};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const BUCKETS = [
+  ['decisions', 'Key decisions made', 'What was decided, and by what evidence'],
+  ['unfinished', 'Unfinished work & blockers', 'Where work stopped and what is in the way'],
+  ['risks', 'Bus-factor & risk', 'Knowledge that lives in one head'],
+  ['contacts', 'Contextual contacts', 'Who to ask about what'],
+  ['gaps', 'Missing evidence', 'Critical questions no source answers']
+];
+const BADGE = {
+  'SOURCE-BACKED': 'bg-emerald-100 text-emerald-800',
+  'STATED BY LEAVER': 'bg-sky-100 text-sky-800',
+  'INFERRED': 'bg-violet-100 text-violet-800',
+  'CONFLICT': 'bg-amber-100 text-amber-800',
+  'MISSING EVIDENCE': 'bg-rose-100 text-rose-800'
+};
+
+function toast(msg, bad) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'fixed top-16 right-4 z-30 px-4 py-2 rounded shadow text-sm ' + (bad ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white');
+  setTimeout(() => t.classList.add('hidden'), 3500);
+}
+
+async function api(path, opts = {}) {
+  const headers = {'X-Role': S.role, ...(opts.headers || {})};
+  if (opts.body && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+  const r = await fetch('/api' + path, {...opts, headers});
+  let j = null;
+  try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error((j && j.detail) || r.statusText);
+  return j;
+}
+const post = (p, b) => api(p, {method: 'POST', body: b === undefined ? undefined : JSON.stringify(b)});
+
+async function loadProjects(selectId) {
+  const list = await api('/projects');
+  const sel = $('#projSel');
+  sel.innerHTML = list.map(p => `<option value="${p.id}">#${p.id} ${esc(p.name)} ${p.status === 'locked' ? '(released)' : ''}</option>`).join('');
+  if (!list.length) { S.pid = null; return; }
+  S.pid = selectId || (list.find(p => String(p.id) === String(S.pid)) ? S.pid : list[0].id);
+  sel.value = S.pid;
+}
+
+async function loadDossier() {
+  S.err = null;
+  if (!S.pid) { S.data = null; render(); return; }
+  try {
+    S.data = await api('/projects/' + S.pid);
+  } catch (e) {
+    S.data = null; S.err = e.message;
+  }
+  render();
+}
+
+function claimButtons(c, locked) {
+  if (S.role !== 'leaver' || locked) return '';
+  const b = (act, label, cls) => `<button data-act="${act}" data-id="${c.id}" class="px-2 py-0.5 text-xs rounded border ${cls}">${label}</button>`;
+  let h = '';
+  if (c.status === 'pending' && c.trust !== 'CONFLICT' && c.trust !== 'MISSING EVIDENCE') h += b('approve', 'Approve', 'border-emerald-300 text-emerald-700 hover:bg-emerald-50');
+  if (c.status !== 'rejected') h += b('reject', 'Reject', 'border-rose-300 text-rose-700 hover:bg-rose-50');
+  if (c.status !== 'pending') h += b('reset', 'Undo', 'border-slate-300 text-slate-600 hover:bg-slate-50');
+  if (c.trust !== 'CONFLICT') h += b('edit', c.trust === 'MISSING EVIDENCE' ? 'Answer this' : 'Edit', 'border-slate-300 text-slate-700 hover:bg-slate-50');
+  h += b('vis', c.visibility === 'all' ? 'Visible to successor' : 'Manager only', c.visibility === 'all' ? 'border-slate-300 text-slate-600 hover:bg-slate-50' : 'border-amber-300 bg-amber-50 text-amber-800');
+  return h;
+}
+
+function claimCard(c, locked) {
+  const sel = S.selClaim === c.id ? 'sel' : '';
+  const rej = c.status === 'rejected' ? 'opacity-50' : '';
+  const src = c.source ? `<button data-act="src" data-id="${c.source.id}" data-claim="${c.id}" class="text-indigo-600 hover:underline">${esc(c.source.type)} · ${esc(c.source.ref)}</button>` : '<span class="text-rose-600">no source</span>';
+  const status = S.role === 'successor' ? '' :
+    `<span class="px-1.5 rounded ${c.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : c.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}">${c.status}</span>`;
+  const routed = c.routed_to ? `<span class="px-1.5 rounded bg-rose-50 text-rose-700">routed to ${esc(c.routed_to)}</span>` : '';
+  return `<div class="card bg-white border rounded p-3 ${sel} ${rej}" data-card="${c.id}">
+    <div class="flex gap-2 items-start">
+      <span class="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${BADGE[c.trust]}">${c.trust}</span>
+      <p class="text-sm flex-1 ${c.status === 'rejected' ? 'line-through' : ''}">${esc(c.text)}</p>
+    </div>
+    ${c.edited && c.original ? `<div class="text-xs text-slate-400 mt-1">edited · original: ${esc(c.original)}</div>` : ''}
+    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+      <span>${esc(c.component)}</span>${c.timestamp ? `<span>· ${esc(c.timestamp.slice(0, 10))}</span>` : ''}
+      <span>· ${src}</span> ${status} ${routed}
+    </div>
+    <div class="mt-2 flex flex-wrap gap-1.5">${claimButtons(c, locked)}</div>
+  </div>`;
+}
+
+function conflictBox(group, items, locked) {
+  const cards = items.map(c => `<div class="card bg-white border border-amber-300 rounded p-3 ${S.selClaim === c.id ? 'sel' : ''}" data-card="${c.id}">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-xs font-semibold text-amber-800">${esc(c.value)}</span>
+        ${c.suggested ? '<span class="text-[10px] px-1.5 rounded bg-emerald-100 text-emerald-800">suggested: newest, highest-weight source</span>' : ''}
+      </div>
+      <p class="text-sm">“${esc(c.quote)}”</p>
+      <div class="mt-2 text-xs text-slate-500 flex flex-wrap items-center gap-2">
+        <span>${esc((c.timestamp || '').slice(0, 10))}</span>
+        <button data-act="src" data-id="${c.source.id}" data-claim="${c.id}" class="text-indigo-600 hover:underline">${esc(c.source.type)} · ${esc(c.source.ref)}</button>
+      </div>
+      ${S.role === 'leaver' && !locked ? `<button data-act="winner" data-id="${c.id}" class="mt-2 px-2 py-0.5 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-700">This is the current value</button>` : ''}
+    </div>`).join('');
+  return `<div class="border-2 border-amber-300 bg-amber-50 rounded-lg p-3">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded ${BADGE.CONFLICT}">CONFLICT</span>
+      <span class="text-sm font-medium">Sources disagree on <b>${esc(group)}</b> — pick the current value</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-2">${cards}</div>
+    ${S.role === 'leaver' && !locked ? `<button data-act="unknown" data-id="${items[0].id}" class="mt-2 text-xs underline text-slate-600">I don't know which is current — mark as unknown</button>` : ''}
+  </div>`;
+}
+
+function bucketHtml(key, title, sub, items, locked) {
+  if (!items.length) return '';
+  let body = '';
+  if (key === 'decisions') {
+    const open = {};
+    items.filter(c => c.trust === 'CONFLICT' && c.status === 'pending').forEach(c => (open[c.conflict_group] = open[c.conflict_group] || []).push(c));
+    body += Object.entries(open).map(([g, it]) => conflictBox(g, it, locked)).join('');
+    body += items.filter(c => !(c.trust === 'CONFLICT' && c.status === 'pending')).map(c => claimCard(c, locked)).join('');
+  } else {
+    body = items.map(c => claimCard(c, locked)).join('');
+  }
+  return `<section class="space-y-2"><div><h3 class="font-semibold">${title} <span class="text-xs text-slate-400 font-normal">(${items.length})</span></h3>
+    <p class="text-xs text-slate-500">${sub}</p></div>${body}</section>`;
+}
+
+function roadmap(b) {
+  const items = [];
+  (b.decisions || []).filter(c => c.trust === 'CONFLICT').forEach(c => c.suggested && items.push(['Confirm which is current: ' + c.conflict_group, c]));
+  (b.unfinished || []).slice(0, 4).forEach(c => items.push([c.text, c]));
+  (b.risks || []).slice(0, 2).forEach(c => items.push([c.text, c]));
+  (b.gaps || []).slice(0, 2).forEach(c => items.push(['Find out: ' + c.text.replace('No source answers: ', ''), c]));
+  return items.slice(0, 8);
+}
+
+function checklist(d) {
+  const st = d.stats, locked = d.project.status === 'locked';
+  const row = (ok, t) => `<li class="flex items-center gap-2"><span class="${ok ? 'text-emerald-600' : 'text-slate-300'}">${ok ? '●' : '○'}</span><span class="${ok ? '' : 'text-slate-600'}">${t}</span></li>`;
+  return `<ul class="text-sm space-y-1">
+    ${row(true, `Exports ingested · ${d.redactions.length} secret(s) masked`)}
+    ${row(st.debrief_answered > 0, `Debrief answered (${st.debrief_answered}/${d.debrief.length})`)}
+    ${row(st.open_conflicts === 0, `Conflicts resolved (${st.open_conflicts} open)`)}
+    ${row(st.pending === 0, `Claims reviewed (${st.pending} pending)`)}
+    ${row(locked, 'Locked & released to successor')}</ul>`;
+}
+
+function render() {
+  const app = $('#app');
+  if (S.err) {
+    app.innerHTML = `<div class="bg-white border rounded p-6 max-w-xl mx-auto mt-10 text-center">
+      <div class="text-3xl mb-2">🔒</div><p class="font-medium mb-1">${esc(S.err)}</p>
+      <p class="text-sm text-slate-500">Switch the role to "Outgoing contributor" to review and release this dossier.</p></div>`;
+    return;
+  }
+  const d = S.data;
+  if (!d) {
+    app.innerHTML = `<div class="bg-white border rounded p-8 max-w-2xl mx-auto mt-10 text-center">
+      <h1 class="text-2xl font-bold mb-2">Hand over a project without the chat archaeology</h1>
+      <p class="text-slate-600 mb-4">Upload GitHub, Slack and Jira exports, or start from the built-in sample project.</p>
+      <button id="btnDemo2" class="bg-indigo-600 text-white rounded px-4 py-2">Load sample project</button></div>`;
+    $('#btnDemo2').onclick = createDemo;
+    return;
+  }
+  const locked = d.project.status === 'locked';
+  const leaver = d.role === 'leaver';
+  const road = roadmap(d.buckets);
+  const left = BUCKETS.map(([k, t, s]) => bucketHtml(k, t, s, d.buckets[k], locked)).join('') ||
+    '<p class="text-sm text-slate-500">Nothing approved yet.</p>';
+
+  const debrief = leaver && !locked ? `<section class="bg-white border rounded p-4">
+      <h3 class="font-semibold">3-question debrief</h3>
+      <p class="text-xs text-slate-500 mb-3">Context that never made it into a commit or a chat. Your answers become [STATED BY LEAVER] claims.</p>
+      <div class="space-y-3">${d.debrief.map(q => `<div><label class="text-sm font-medium block mb-1">${q.idx}. ${esc(q.question)}</label>
+        <textarea data-q="${q.idx}" rows="3" class="w-full border rounded p-2 text-sm">${esc(q.answer)}</textarea></div>`).join('')}</div>
+      <button data-act="debrief" class="mt-3 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded">Save answers</button></section>` : '';
+
+  const redactions = d.role !== 'successor' && d.redactions.length ? `<details class="bg-white border rounded p-3 text-sm">
+      <summary class="cursor-pointer font-medium">🛡 ${d.redactions.length} secret(s) masked before storage</summary>
+      <ul class="mt-2 text-xs text-slate-600 space-y-0.5">${d.redactions.map(r => `<li><b>${esc(r.kind)}</b> in <code>${esc(r.location)}</code></li>`).join('')}</ul></details>` : '';
+
+  const roadmapHtml = road.length ? `<section class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+      <h3 class="font-semibold text-indigo-900">Day-1 continuation roadmap</h3>
+      <ol class="mt-2 space-y-1.5 text-sm list-decimal list-inside">${road.map(([t, c]) => `<li><button data-act="src" data-id="${c.source ? c.source.id : ''}" data-claim="${c.id}" class="text-left hover:underline">${esc(t)}</button></li>`).join('')}</ol></section>` : '';
+
+  const actions = leaver && !locked ? `<section class="bg-white border rounded p-4 space-y-3">
+      <h3 class="font-semibold">Review progress</h3>${checklist(d)}
+      <div class="flex flex-wrap gap-2">
+        <button data-act="approveAll" class="px-3 py-1.5 text-sm border rounded hover:bg-slate-50">Approve all remaining</button>
+        <button data-act="lock" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700">Lock & release to successor</button>
+      </div><p class="text-xs text-slate-500">Successors only see approved claims marked "Visible to successor". ${d.stats.dropped_ungrounded} extracted claim(s) were dropped for lacking a verbatim source quote.</p></section>` : '';
+
+  const banner = locked ? `<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded p-3">Handover released ${esc((d.project.locked_at || '').slice(0, 10))}. ${leaver ? 'The dossier is now read-only.' : ''}</div>` :
+    (d.role === 'manager' ? `<div class="bg-slate-100 border text-sm rounded p-3 text-slate-600">Manager view: you see every claim, including rejected and manager-only ones. Successors see only what is approved and shared.</div>` : '');
+
+  $('#app').innerHTML = `
+    <div class="mb-4"><h1 class="text-xl font-bold">${esc(d.project.name)}</h1>
+      <p class="text-sm text-slate-500">Handover from <b>${esc(d.project.leaver)}</b> · evidence up to ${esc((d.project.as_of || '').slice(0, 10))} · viewing as <b>${esc(d.role)}</b></p></div>
+    <div class="grid lg:grid-cols-5 gap-4 items-start">
+      <div class="lg:col-span-3 space-y-4">${banner}${roadmapHtml}${debrief}${actions}${redactions}${left}</div>
+      <aside class="lg:col-span-2 lg:sticky lg:top-16"><div id="inspector" class="bg-white border rounded-lg overflow-hidden"></div></aside>
+    </div>`;
+  renderInspector();
+}
+
+function renderInspector() {
+  const el = $('#inspector');
+  if (!el) return;
+  const s = S.selSource;
+  if (!s) {
+    el.innerHTML = `<div class="p-6 text-sm text-slate-500"><p class="font-medium text-slate-700 mb-1">Evidence inspector</p>
+      Click any source link on a claim to see the original commit, PR thread, ticket or chat message — with the quoted passage highlighted.</div>`;
+    return;
+  }
+  const hl = (text) => {
+    for (const q of s.highlights || []) {
+      const i = text.indexOf(q);
+      if (i >= 0) return esc(text.slice(0, i)) + '<mark>' + esc(q) + '</mark>' + esc(text.slice(i + q.length));
+    }
+    return esc(text);
+  };
+  const m = s.meta || {};
+  let extra = '';
+  if (s.type === 'commit') {
+    extra = `<div class="text-xs text-slate-500 mt-3">sha <code>${esc((m.sha || '').slice(0, 12))}</code> · branch <code>${esc(m.branch)}</code></div>
+      <div class="text-xs mt-2"><b>Files:</b> ${(m.files || []).map(f => `<code class="bg-slate-100 px-1 rounded mr-1">${esc(f)}</code>`).join('')}</div>
+      ${m.patch ? `<pre class="mt-3 text-xs bg-slate-900 text-slate-100 rounded p-3 overflow-auto max-h-72">${esc(m.patch)}</pre>` : ''}`;
+  } else if (s.type === 'slack') {
+    extra = `<div class="mt-3 text-xs text-slate-500">Conversation context</div><div class="mt-1 space-y-1">${(m.context || []).map(x =>
+      `<div class="text-xs border-l-2 pl-2 ${x.text === s.text && x.ts === s.ts ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 text-slate-500'}"><b>${esc(x.author)}</b> ${esc(x.ts.slice(0, 16).replace('T', ' '))}<br>${esc(x.text)}</div>`).join('')}</div>`;
+  } else if (s.type === 'pr') {
+    extra = `<div class="mt-3 text-xs text-slate-500">${m.state ? 'state: ' + esc(m.state) : ''} ${(m.reviewers || []).length ? '· reviewers: ' + esc(m.reviewers.join(', ')) : ''}</div>
+      ${(m.files || []).length ? `<div class="text-xs mt-1"><b>Files:</b> ${m.files.map(f => `<code class="bg-slate-100 px-1 rounded mr-1">${esc(f)}</code>`).join('')}</div>` : ''}`;
+  } else if (s.type === 'issue') {
+    extra = `<div class="mt-3 text-xs text-slate-500">status: ${esc(m.status)} · assignee: ${esc(m.assignee)} · reporter: ${esc(m.reporter)}</div>`;
+  }
+  el.innerHTML = `<div class="px-4 py-2 border-b bg-slate-50 flex items-center justify-between">
+      <div class="text-sm font-medium">${esc(s.type.toUpperCase())} · ${esc(s.ref)}</div>
+      <button data-act="closeSrc" class="text-xs text-slate-500 hover:text-slate-800">close</button></div>
+    <div class="p-4"><div class="text-xs text-slate-500 mb-2">${esc(s.author)} · ${esc((s.ts || '').replace('T', ' ').replace('Z', ' UTC'))}</div>
+    <pre class="text-sm font-sans">${hl(s.text)}</pre>${extra}</div>`;
+}
+
+async function openSource(id, claimId) {
+  if (!id) return;
+  try {
+    S.selSource = await api('/sources/' + id);
+    S.selClaim = Number(claimId) || null;
+    document.querySelectorAll('[data-card]').forEach(e => e.classList.toggle('sel', Number(e.dataset.card) === S.selClaim));
+    renderInspector();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function createDemo() {
+  try {
+    const r = await post('/demo');
+    S.selSource = null;
+    await loadProjects(r.id);
+    await loadDossier();
+    toast('Sample project loaded');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function act(el) {
+  const a = el.dataset.act, id = el.dataset.id;
+  try {
+    if (a === 'src') return openSource(id, el.dataset.claim);
+    if (a === 'closeSrc') { S.selSource = null; S.selClaim = null; return render(); }
+    if (a === 'approve' || a === 'reject' || a === 'reset') await post(`/claims/${id}/action`, {action: a});
+    else if (a === 'vis') {
+      const c = Object.values(S.data.buckets).flat().find(x => x.id == id);
+      await post(`/claims/${id}/action`, {action: 'visibility', visibility: c.visibility === 'all' ? 'manager' : 'all'});
+    } else if (a === 'edit') {
+      const c = Object.values(S.data.buckets).flat().find(x => x.id == id);
+      const t = prompt(c.trust === 'MISSING EVIDENCE' ? 'Your answer (becomes a [STATED BY LEAVER] claim):' : 'Edit this claim:', c.trust === 'MISSING EVIDENCE' ? '' : c.text);
+      if (!t || !t.trim()) return;
+      await post(`/claims/${id}/action`, {action: 'edit', text: t});
+    } else if (a === 'winner') await post(`/claims/${id}/resolve`, {mode: 'winner'});
+    else if (a === 'unknown') await post(`/claims/${id}/resolve`, {mode: 'unknown'});
+    else if (a === 'debrief') {
+      const answers = {};
+      document.querySelectorAll('textarea[data-q]').forEach(t => answers[t.dataset.q] = t.value);
+      const r = await post(`/projects/${S.pid}/debrief`, {answers});
+      toast(`${r.saved} answer(s) saved as claims`);
+    } else if (a === 'approveAll') {
+      const r = await post(`/projects/${S.pid}/approve-all`);
+      toast(`${r.approved} claim(s) approved`);
+    } else if (a === 'lock') {
+      if (!confirm('Lock the dossier and release it to the successor? This cannot be undone.')) return;
+      await post(`/projects/${S.pid}/lock`);
+      toast('Handover released');
+    }
+    await loadDossier();
+  } catch (e) { toast(e.message, true); }
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (el) act(el);
+});
+$('#roleSel').onchange = e => { S.role = e.target.value; S.selSource = null; S.selClaim = null; loadDossier(); };
+$('#projSel').onchange = e => { S.pid = e.target.value; S.selSource = null; loadDossier(); };
+$('#btnDemo').onclick = createDemo;
+$('#btnUpload').onclick = () => { $('#modal').style.display = 'flex'; };
+$('#upCancel').onclick = () => { $('#modal').style.display = 'none'; };
+$('#upForm').onsubmit = async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  for (const k of ['github', 'slack', 'jira']) { const f = fd.get(k); if (f && !f.name) fd.delete(k); }
+  try {
+    const r = await api('/ingest', {method: 'POST', body: fd});
+    $('#modal').style.display = 'none';
+    S.selSource = null;
+    await loadProjects(r.id);
+    await loadDossier();
+    toast('Dossier built');
+  } catch (err) { toast(err.message, true); }
+};
+
+(async () => { await loadProjects(); await loadDossier(); })();
+</script>
+</body>
+</html>
