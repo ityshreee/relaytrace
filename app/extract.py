@@ -106,7 +106,8 @@ def _dt(s):
 
 def days_between(a, b):
     da, db = _dt(a), _dt(b)
-    return (db - da).days if da and db else 0
+    # compare calendar days, not 24h blocks, so Sep 2 16:00 -> Oct 28 10:00 is 56 days, not 55
+    return (db.date() - da.date()).days if da and db else 0
 
 
 def rank(s):
@@ -227,8 +228,15 @@ def extract(data, leaver):
                 seen_b.add(sent)
                 blockers.append((s, sent))
     for s, sent in sorted(blockers, key=lambda x: x[0]["ts"], reverse=True)[:8]:
+        where = ""
+        if s["type"] == "issue":
+            where = f" (in {s['ref']}: {first_line(s['text']).split(': ', 1)[-1]})"
+        elif s["type"] == "pr":
+            where = f" (in {s['ref']}: {first_line(s['text'])})"
+        elif s["type"] == "slack":
+            where = f" (Slack, {s['author']}, {s['ts'][:10]})"
         add(bucket="unfinished", trust="SOURCE-BACKED", component=component_of(sent, s["text"]), attribute="blocker",
-            value=sent[:140], summary=f"Blocker / caveat: {sent}", timestamp=s["ts"],
+            value=sent[:140], summary=f"Blocker / caveat: {sent}{where}", timestamp=s["ts"],
             source_key=key_of[id(s)], quote=sent)
 
     # ---------- 3. bus-factor risk ----------

@@ -6,101 +6,165 @@
 <title>RelayTrace — evidence-linked handover</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
+  body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
   mark{background:#fde68a;padding:0 2px;border-radius:3px}
   pre{white-space:pre-wrap;word-break:break-word}
-  .card{transition:box-shadow .15s}
+  code{background:#eef2ff;color:#4338ca;padding:0 4px;border-radius:4px;font-size:.85em}
+  .card{transition:box-shadow .15s,transform .15s}
+  .card:hover{box-shadow:0 4px 14px rgba(79,70,229,.10)}
   .card.sel{box-shadow:0 0 0 2px #6366f1}
+  .tip{position:relative}
+  .tip:hover::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);
+    background:#0f172a;color:#fff;font-size:11px;line-height:1.35;padding:6px 8px;border-radius:6px;width:max-content;max-width:230px;
+    white-space:normal;text-align:left;z-index:60;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:none;font-weight:400}
+  .tip-r:hover::after{left:auto;right:0;transform:none}
+  .hero-bg{background:radial-gradient(1200px 400px at 10% -20%,#c7d2fe 0,transparent 60%),radial-gradient(900px 400px at 100% 0,#fbcfe8 0,transparent 55%),#f8fafc}
+  .btn{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;font-size:12px;border-radius:8px;border:1px solid;font-weight:500;transition:all .12s}
+  .btn:hover{transform:translateY(-1px)}
+  .step-done{background:#10b981;color:#fff;border-color:#10b981}
+  .step-now{background:#4f46e5;color:#fff;border-color:#4f46e5;box-shadow:0 0 0 4px rgba(99,102,241,.25)}
+  .step-todo{background:#fff;color:#94a3b8;border-color:#cbd5e1}
+  @keyframes fall{0%{transform:translateY(-10vh) rotate(0);opacity:1}100%{transform:translateY(110vh) rotate(540deg);opacity:.8}}
+  .confetti{position:fixed;top:0;z-index:70;font-size:24px;animation:fall 3.2s linear forwards;pointer-events:none}
+  @keyframes pop{0%{transform:scale(.96);opacity:0}100%{transform:scale(1);opacity:1}}
+  .pop{animation:pop .18s ease-out}
+  #spot{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(15,23,42,.68);transition:all .3s;pointer-events:none;z-index:80}
+  #tourCard{position:fixed;z-index:81;width:min(340px,92vw)}
 </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-<header class="bg-white border-b sticky top-0 z-20">
+<header class="bg-white/90 backdrop-blur border-b sticky top-0 z-40">
   <div class="max-w-[1500px] mx-auto px-4 py-2 flex flex-wrap items-center gap-3">
-    <div class="font-bold text-indigo-700 text-lg">RelayTrace</div>
-    <div class="text-xs text-slate-500 hidden md:block">evidence-linked knowledge handover</div>
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-fuchsia-500 text-white font-black grid place-items-center">R</div>
+      <div><div class="font-extrabold text-slate-900 leading-none">RelayTrace</div>
+      <div class="text-[11px] text-slate-500 hidden md:block leading-tight">every handover claim comes with a receipt</div></div>
+    </div>
     <div class="flex-1"></div>
-    <label class="text-xs text-slate-500">Project
-      <select id="projSel" class="ml-1 border rounded px-2 py-1 text-sm"></select>
-    </label>
-    <label class="text-xs text-slate-500">Viewing as
-      <select id="roleSel" class="ml-1 border rounded px-2 py-1 text-sm">
-        <option value="leaver">Outgoing contributor (leaver)</option>
-        <option value="manager">Project lead / manager</option>
-        <option value="successor">Successor</option>
-      </select>
-    </label>
-    <button id="btnDemo" class="text-sm border rounded px-3 py-1 hover:bg-slate-100">New demo project</button>
-    <button id="btnUpload" class="text-sm bg-indigo-600 text-white rounded px-3 py-1 hover:bg-indigo-700">Upload exports</button>
+    <label class="text-xs text-slate-500 tip" data-tip="Each project is one handover. Pick one or create a new demo.">Project
+      <select id="projSel" class="ml-1 border rounded-lg px-2 py-1 text-sm bg-white"></select></label>
+    <label id="roleBox" class="text-xs text-slate-500 tip" data-tip="Same data, three different views. Try each one: the server enforces what every role can see.">Viewing as
+      <select id="roleSel" class="ml-1 border rounded-lg px-2 py-1 text-sm bg-white font-medium">
+        <option value="leaver">🧑‍💻 Outgoing contributor</option>
+        <option value="manager">🧭 Project lead / manager</option>
+        <option value="successor">🎯 Successor</option>
+      </select></label>
+    <button data-act="tour" class="text-sm font-semibold rounded-lg px-3 py-1.5 bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-white hover:opacity-90 tip" data-tip="A 60-second guided walkthrough that points at each part of the screen.">▶ Take the tour</button>
+    <button id="btnDemo" class="text-sm border rounded-lg px-3 py-1.5 hover:bg-slate-100 tip" data-tip="Creates a fresh copy of the PayFlow-Core sample project so you can try the full flow again.">New demo project</button>
+    <button id="btnUpload" class="text-sm bg-slate-900 text-white rounded-lg px-3 py-1.5 hover:bg-slate-700 tip tip-r" data-tip="Bring your own GitHub JSON, Slack JSON and Jira/Linear CSV. Secrets are masked before storage.">⬆ Upload exports</button>
   </div>
 </header>
 
-<div id="toast" class="fixed top-16 right-4 z-30 hidden px-4 py-2 rounded shadow text-sm"></div>
+<div id="toast" class="fixed top-16 right-4 z-[90] hidden px-4 py-2 rounded-lg shadow-lg text-sm"></div>
+<main class="max-w-[1500px] mx-auto px-4 py-4"><div id="app"></div></main>
 
-<main class="max-w-[1500px] mx-auto px-4 py-4">
-  <div id="app"></div>
-</main>
+<!-- generic dialog -->
+<div id="dlg" class="fixed inset-0 bg-black/45 z-[85] hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-lg pop">
+    <h2 id="dlgTitle" class="font-bold text-lg"></h2>
+    <p id="dlgDesc" class="text-sm text-slate-500 mt-1"></p>
+    <textarea id="dlgText" rows="5" class="hidden mt-3 w-full border rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
+    <div class="flex justify-end gap-2 mt-4">
+      <button id="dlgNo" class="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
+      <button id="dlgYes" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">OK</button>
+    </div>
+  </div>
+</div>
 
 <!-- upload modal -->
-<div id="modal" class="fixed inset-0 bg-black/40 z-30 hidden items-center justify-center p-4">
-  <form id="upForm" class="bg-white rounded-lg shadow-xl p-5 w-full max-w-lg space-y-3">
-    <h2 class="font-semibold text-lg">Upload project exports</h2>
-    <p class="text-xs text-slate-500">Offline files only. Secrets are masked before anything is stored. Provide at least one file.
-      No files handy? Download the sample set:
+<div id="modal" class="fixed inset-0 bg-black/45 z-[85] hidden items-center justify-center p-4">
+  <form id="upForm" class="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-lg space-y-3 pop">
+    <h2 class="font-bold text-lg">Upload project exports</h2>
+    <p class="text-xs text-slate-500">Offline files only. Secrets are masked <b>before</b> anything is stored. Provide at least one file.
+      No files handy? Grab the samples:
       <a class="text-indigo-600 underline" href="/api/demo-files/github.json">github.json</a>,
       <a class="text-indigo-600 underline" href="/api/demo-files/slack.json">slack.json</a>,
       <a class="text-indigo-600 underline" href="/api/demo-files/jira.csv">jira.csv</a>.</p>
     <div class="grid grid-cols-2 gap-3">
-      <label class="text-sm">Project name<input name="name" class="mt-1 w-full border rounded px-2 py-1" value="My project"></label>
-      <label class="text-sm">Leaver's username<input name="leaver" placeholder="auto-detect if blank" class="mt-1 w-full border rounded px-2 py-1"></label>
+      <label class="text-sm">Project name<input name="name" class="mt-1 w-full border rounded-lg px-2 py-1" value="My project"></label>
+      <label class="text-sm">Leaver's username<input name="leaver" placeholder="auto-detect if blank" class="mt-1 w-full border rounded-lg px-2 py-1"></label>
     </div>
-    <label class="text-sm block">GitHub export (.json)<input type="file" name="github" accept=".json" class="mt-1 block w-full text-sm"></label>
-    <label class="text-sm block">Slack export (.json)<input type="file" name="slack" accept=".json" class="mt-1 block w-full text-sm"></label>
-    <label class="text-sm block">Jira / Linear export (.csv)<input type="file" name="jira" accept=".csv" class="mt-1 block w-full text-sm"></label>
+    <label class="text-sm block">🐙 GitHub export (.json)<input type="file" name="github" accept=".json" class="mt-1 block w-full text-sm"></label>
+    <label class="text-sm block">💬 Slack export (.json)<input type="file" name="slack" accept=".json" class="mt-1 block w-full text-sm"></label>
+    <label class="text-sm block">🎫 Jira / Linear export (.csv)<input type="file" name="jira" accept=".csv" class="mt-1 block w-full text-sm"></label>
     <div class="flex justify-end gap-2 pt-2">
-      <button type="button" id="upCancel" class="px-3 py-1 text-sm border rounded">Cancel</button>
-      <button class="px-3 py-1 text-sm bg-indigo-600 text-white rounded">Build dossier</button>
+      <button type="button" id="upCancel" class="px-3 py-1.5 text-sm border rounded-lg">Cancel</button>
+      <button class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg">Build dossier</button>
     </div>
   </form>
 </div>
 
+<div id="tourLayer" class="hidden"><div id="spot"></div><div id="tourCard" class="bg-white rounded-2xl shadow-2xl p-4 pop"></div></div>
+
 <script>
-const S = {role: 'leaver', pid: null, data: null, selSource: null, selClaim: null, err: null};
+const S = {role: 'leaver', pid: null, data: null, selSource: null, selClaim: null, err: null,
+           open: {decisions: true, unfinished: true, risks: false, contacts: false, gaps: true}, guide: true};
+try { if (localStorage.getItem('rt_guide') === '0') S.guide = false; } catch (e) {}
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
 
 const BUCKETS = [
-  ['decisions', 'Key decisions made', 'What was decided, and by what evidence'],
-  ['unfinished', 'Unfinished work & blockers', 'Where work stopped and what is in the way'],
-  ['risks', 'Bus-factor & risk', 'Knowledge that lives in one head'],
-  ['contacts', 'Contextual contacts', 'Who to ask about what'],
-  ['gaps', 'Missing evidence', 'Critical questions no source answers']
+  ['decisions', '⚖️', 'Key decisions made', 'The "why" behind how the system is built. Read these first so you do not undo a choice by accident.'],
+  ['unfinished', '🚧', 'Unfinished work & blockers', 'Half-done branches, open PRs and tickets, and what is stuck. This is your Day-1 to-do list.'],
+  ['risks', '🧠', 'Bus-factor risk', 'Files that only one person has ever touched. If they leave, this knowledge leaves too.'],
+  ['contacts', '👥', 'Contextual contacts', 'Who to ask about which area, based on who really reviewed and discussed the work.'],
+  ['gaps', '🕳️', 'Missing evidence', 'Critical questions that no source answers. Better to know what is unknown than to assume.']
 ];
 const BADGE = {
-  'SOURCE-BACKED': 'bg-emerald-100 text-emerald-800',
-  'STATED BY LEAVER': 'bg-sky-100 text-sky-800',
-  'INFERRED': 'bg-violet-100 text-violet-800',
-  'CONFLICT': 'bg-amber-100 text-amber-800',
-  'MISSING EVIDENCE': 'bg-rose-100 text-rose-800'
+  'SOURCE-BACKED': 'bg-emerald-100 text-emerald-800', 'STATED BY LEAVER': 'bg-sky-100 text-sky-800',
+  'INFERRED': 'bg-violet-100 text-violet-800', 'CONFLICT': 'bg-amber-100 text-amber-800', 'MISSING EVIDENCE': 'bg-rose-100 text-rose-800'
 };
+const TRUST_HELP = {
+  'SOURCE-BACKED': ['✅', 'A verbatim quote exists in a commit, PR, ticket or chat. Click the source link to see it highlighted.'],
+  'STATED BY LEAVER': ['🗣️', 'The outgoing person wrote this themselves (debrief answer or gap fill). Trusted, but not from a document.'],
+  'INFERRED': ['🧮', 'Calculated from patterns, e.g. "only one person ever edited this file". Useful signal, not a quote.'],
+  'CONFLICT': ['⚡', 'Two sources disagree (Slack says Redis, a ticket says Kafka). A human must pick the current truth.'],
+  'MISSING EVIDENCE': ['❓', 'Nothing in the exports answers this. It is routed to the person most likely to know.']
+};
+const ROLE_INFO = {
+  leaver: ['🧑‍💻', 'You are the outgoing contributor.', 'You answer the debrief, settle conflicts, approve or reject every claim, choose what the successor can see, then lock and release.'],
+  manager: ['🧭', 'You are the project lead.', 'Read-only oversight. You see every claim, including rejected and manager-only ones, plus the secret-redaction report.'],
+  successor: ['🎯', 'You are the successor.', 'You only see claims the leaver approved and shared, after the handover is released. Every claim still links to its original evidence.']
+};
+const ATTR_GROUPS = [['unmerged branch', 'Branches never merged'], ['open PR', 'Open pull requests'], ['open ticket', 'Tickets still assigned to the leaver'], ['blocker', 'Blockers & caveats']];
 
+let toastT;
 function toast(msg, bad) {
   const t = $('#toast');
   t.textContent = msg;
-  t.className = 'fixed top-16 right-4 z-30 px-4 py-2 rounded shadow text-sm ' + (bad ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white');
-  setTimeout(() => t.classList.add('hidden'), 3500);
+  t.className = 'fixed top-16 right-4 z-[90] px-4 py-2 rounded-lg shadow-lg text-sm pop ' + (bad ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), 3500);
 }
 
 async function api(path, opts = {}) {
   const headers = {'X-Role': S.role, ...(opts.headers || {})};
   if (opts.body && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
   const r = await fetch('/api' + path, {...opts, headers});
-  let j = null;
-  try { j = await r.json(); } catch (e) {}
+  let j = null; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error((j && j.detail) || r.statusText);
   return j;
 }
 const post = (p, b) => api(p, {method: 'POST', body: b === undefined ? undefined : JSON.stringify(b)});
 
+/* ---------- dialogs ---------- */
+function dialog({title, desc, text, yes = 'OK', danger}) {
+  return new Promise(res => {
+    const d = $('#dlg'), ta = $('#dlgText');
+    $('#dlgTitle').textContent = title; $('#dlgDesc').textContent = desc || '';
+    ta.classList.toggle('hidden', text === undefined); ta.value = text || '';
+    $('#dlgYes').textContent = yes;
+    $('#dlgYes').className = 'px-3 py-1.5 text-sm text-white rounded-lg ' + (danger ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700');
+    d.style.display = 'flex';
+    const done = v => { d.style.display = 'none'; res(v); };
+    $('#dlgYes').onclick = () => done(text === undefined ? true : ta.value);
+    $('#dlgNo').onclick = () => done(null);
+    if (text !== undefined) setTimeout(() => ta.focus(), 50);
+  });
+}
+
+/* ---------- loading ---------- */
 async function loadProjects(selectId) {
   const list = await api('/projects');
   const sel = $('#projSel');
@@ -109,262 +173,369 @@ async function loadProjects(selectId) {
   S.pid = selectId || (list.find(p => String(p.id) === String(S.pid)) ? S.pid : list[0].id);
   sel.value = S.pid;
 }
-
 async function loadDossier() {
   S.err = null;
   if (!S.pid) { S.data = null; render(); return; }
-  try {
-    S.data = await api('/projects/' + S.pid);
-  } catch (e) {
-    S.data = null; S.err = e.message;
-  }
+  try { S.data = await api('/projects/' + S.pid); } catch (e) { S.data = null; S.err = e.message; }
   render();
 }
+const allClaims = d => Object.values(d.buckets).flat();
 
+/* ---------- claim UI ---------- */
+function btn(act, id, icon, label, cls, tip) {
+  return `<button data-act="${act}" data-id="${id}" data-tip="${esc(tip)}" class="btn tip ${cls}">${icon} ${label}</button>`;
+}
 function claimButtons(c, locked) {
   if (S.role !== 'leaver' || locked) return '';
-  const b = (act, label, cls) => `<button data-act="${act}" data-id="${c.id}" class="px-2 py-0.5 text-xs rounded border ${cls}">${label}</button>`;
   let h = '';
-  if (c.status === 'pending' && c.trust !== 'CONFLICT' && c.trust !== 'MISSING EVIDENCE') h += b('approve', 'Approve', 'border-emerald-300 text-emerald-700 hover:bg-emerald-50');
-  if (c.status !== 'rejected') h += b('reject', 'Reject', 'border-rose-300 text-rose-700 hover:bg-rose-50');
-  if (c.status !== 'pending') h += b('reset', 'Undo', 'border-slate-300 text-slate-600 hover:bg-slate-50');
-  if (c.trust !== 'CONFLICT') h += b('edit', c.trust === 'MISSING EVIDENCE' ? 'Answer this' : 'Edit', 'border-slate-300 text-slate-700 hover:bg-slate-50');
-  h += b('vis', c.visibility === 'all' ? 'Visible to successor' : 'Manager only', c.visibility === 'all' ? 'border-slate-300 text-slate-600 hover:bg-slate-50' : 'border-amber-300 bg-amber-50 text-amber-800');
+  const open = c.trust !== 'CONFLICT' && c.trust !== 'MISSING EVIDENCE';
+  if (c.status === 'pending' && open) h += btn('approve', c.id, '✓', 'Approve', 'border-emerald-300 text-emerald-700 hover:bg-emerald-50', 'Confirm this is accurate. Only approved claims can reach the successor.');
+  if (c.status !== 'rejected') h += btn('reject', c.id, '✕', 'Reject', 'border-rose-300 text-rose-700 hover:bg-rose-50', 'This is wrong or irrelevant. It will never be shown to the successor.');
+  if (c.status !== 'pending') h += btn('reset', c.id, '↺', 'Undo', 'border-slate-300 text-slate-600 hover:bg-slate-50', 'Put this claim back to pending so you can decide again.');
+  if (c.trust !== 'CONFLICT') h += btn('edit', c.id, '✎', c.trust === 'MISSING EVIDENCE' ? 'Answer this' : 'Edit',
+    c.trust === 'MISSING EVIDENCE' ? 'bg-rose-600 border-rose-600 text-white hover:bg-rose-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50',
+    c.trust === 'MISSING EVIDENCE' ? 'Type the answer yourself. It becomes a [STATED BY LEAVER] claim and is approved.' : 'Reword this claim. Your edit is approved automatically and the original stays visible.');
+  h += c.visibility === 'all'
+    ? btn('vis', c.id, '👁', 'Shared', 'border-slate-300 text-slate-600 hover:bg-slate-50', 'The successor will see this once approved. Click to make it manager-only.')
+    : btn('vis', c.id, '🔒', 'Manager only', 'border-amber-300 bg-amber-50 text-amber-800', 'Hidden from the successor, visible to managers. Click to share it.');
   return h;
 }
-
+function badge(c) {
+  return `<span class="tip shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${BADGE[c.trust]}" data-tip="${esc(TRUST_HELP[c.trust][1])}">${TRUST_HELP[c.trust][0]} ${c.trust}</span>`;
+}
 function claimCard(c, locked) {
   const sel = S.selClaim === c.id ? 'sel' : '';
   const rej = c.status === 'rejected' ? 'opacity-50' : '';
-  const src = c.source ? `<button data-act="src" data-id="${c.source.id}" data-claim="${c.id}" class="text-indigo-600 hover:underline">${esc(c.source.type)} · ${esc(c.source.ref)}</button>` : '<span class="text-rose-600">no source</span>';
+  const src = c.source ? `<button data-act="src" data-id="${c.source.id}" data-claim="${c.id}" class="tip px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100" data-tip="Open the original ${esc(c.source.type)} with the proof highlighted.">🔎 ${esc(c.source.type)} · ${esc(c.source.ref)}</button>`
+    : '<span class="text-rose-600">no source yet</span>';
   const status = S.role === 'successor' ? '' :
-    `<span class="px-1.5 rounded ${c.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : c.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}">${c.status}</span>`;
-  const routed = c.routed_to ? `<span class="px-1.5 rounded bg-rose-50 text-rose-700">routed to ${esc(c.routed_to)}</span>` : '';
-  return `<div class="card bg-white border rounded p-3 ${sel} ${rej}" data-card="${c.id}">
-    <div class="flex gap-2 items-start">
-      <span class="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${BADGE[c.trust]}">${c.trust}</span>
-      <p class="text-sm flex-1 ${c.status === 'rejected' ? 'line-through' : ''}">${esc(c.text)}</p>
-    </div>
-    ${c.edited && c.original ? `<div class="text-xs text-slate-400 mt-1">edited · original: ${esc(c.original)}</div>` : ''}
+    `<span class="px-1.5 rounded ${c.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : c.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}">${c.status}</span>`;
+  const routed = c.routed_to ? `<span class="px-1.5 rounded bg-rose-50 text-rose-700">ask the ${esc(c.routed_to)}</span>` : '';
+  return `<div class="card bg-white border rounded-xl p-3 ${sel} ${rej}" data-card="${c.id}">
+    <div class="flex gap-2 items-start">${badge(c)}<p class="text-sm flex-1 ${c.status === 'rejected' ? 'line-through' : ''}">${fmt(c.text)}</p></div>
+    ${c.edited && c.original ? `<div class="text-xs text-slate-400 mt-1">edited · original: ${fmt(c.original)}</div>` : ''}
     <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-      <span>${esc(c.component)}</span>${c.timestamp ? `<span>· ${esc(c.timestamp.slice(0, 10))}</span>` : ''}
-      <span>· ${src}</span> ${status} ${routed}
-    </div>
-    <div class="mt-2 flex flex-wrap gap-1.5">${claimButtons(c, locked)}</div>
-  </div>`;
+      <span class="px-1.5 rounded bg-slate-100">${esc(c.component)}</span>${c.timestamp ? `<span>${esc(c.timestamp.slice(0, 10))}</span>` : ''}
+      ${src} ${status} ${routed}</div>
+    <div class="mt-2 flex flex-wrap gap-1.5">${claimButtons(c, locked)}</div></div>`;
 }
-
 function conflictBox(group, items, locked) {
-  const cards = items.map(c => `<div class="card bg-white border border-amber-300 rounded p-3 ${S.selClaim === c.id ? 'sel' : ''}" data-card="${c.id}">
-      <div class="flex items-center gap-2 mb-1">
-        <span class="text-xs font-semibold text-amber-800">${esc(c.value)}</span>
-        ${c.suggested ? '<span class="text-[10px] px-1.5 rounded bg-emerald-100 text-emerald-800">suggested: newest, highest-weight source</span>' : ''}
-      </div>
+  const vals = items.map(c => c.value).join(' or ');
+  const cards = items.map(c => `<div class="card bg-white border border-amber-300 rounded-xl p-3 ${S.selClaim === c.id ? 'sel' : ''}" data-card="${c.id}">
+      <div class="flex items-center gap-2 mb-1"><span class="text-sm font-bold text-amber-800">${esc(c.value)}</span>
+        ${c.suggested ? '<span class="tip text-[10px] px-1.5 rounded bg-emerald-100 text-emerald-800" data-tip="Our rule: a newer source with higher weight (commit > PR > ticket > chat) is probably right. You still decide.">★ suggested: newest, strongest source</span>' : ''}</div>
       <p class="text-sm">“${esc(c.quote)}”</p>
-      <div class="mt-2 text-xs text-slate-500 flex flex-wrap items-center gap-2">
-        <span>${esc((c.timestamp || '').slice(0, 10))}</span>
-        <button data-act="src" data-id="${c.source.id}" data-claim="${c.id}" class="text-indigo-600 hover:underline">${esc(c.source.type)} · ${esc(c.source.ref)}</button>
-      </div>
-      ${S.role === 'leaver' && !locked ? `<button data-act="winner" data-id="${c.id}" class="mt-2 px-2 py-0.5 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-700">This is the current value</button>` : ''}
-    </div>`).join('');
-  return `<div class="border-2 border-amber-300 bg-amber-50 rounded-lg p-3">
-    <div class="flex items-center gap-2 mb-2">
-      <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded ${BADGE.CONFLICT}">CONFLICT</span>
-      <span class="text-sm font-medium">Sources disagree on <b>${esc(group)}</b> — pick the current value</span>
-    </div>
-    <div class="grid md:grid-cols-2 gap-2">${cards}</div>
-    ${S.role === 'leaver' && !locked ? `<button data-act="unknown" data-id="${items[0].id}" class="mt-2 text-xs underline text-slate-600">I don't know which is current — mark as unknown</button>` : ''}
-  </div>`;
+      <div class="mt-2 text-xs text-slate-500 flex flex-wrap items-center gap-2"><span>${esc((c.timestamp || '').slice(0, 10))}</span>
+        <button data-act="src" data-id="${c.source.id}" data-claim="${c.id}" class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100">🔎 ${esc(c.source.type)} · ${esc(c.source.ref)}</button></div>
+      ${S.role === 'leaver' && !locked ? `<button data-act="winner" data-id="${c.id}" class="tip mt-2 btn bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700" data-tip="Marks ${esc(c.value)} as correct and automatically rejects the other side.">✔ ${esc(c.value)} is current</button>` : ''}</div>`).join('');
+  return `<div id="conflictBox" class="border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4">
+    <div class="flex items-start gap-2 mb-1"><span class="text-2xl">⚡</span><div>
+      <div class="font-bold text-amber-900">Conflict: ${esc(vals)}?</div>
+      <div class="text-xs text-slate-600">Two sources disagree about <b>${esc(group)}</b>. Read both receipts, then tell RelayTrace which one is true today.</div></div></div>
+    <div class="grid md:grid-cols-2 gap-2 mt-2">${cards}</div>
+    ${S.role === 'leaver' && !locked ? `<button data-act="unknown" data-id="${items[0].id}" class="tip mt-2 text-xs underline text-slate-600" data-tip="Rejects both sides and creates a Missing-evidence item for the manager to resolve.">I don't know which is current. Mark as unknown</button>` : ''}</div>`;
 }
 
-function bucketHtml(key, title, sub, items, locked) {
+function section(key, icon, title, sub, items, locked, d) {
   if (!items.length) return '';
+  const isOpen = S.open[key];
+  const pend = items.filter(c => c.status === 'pending' && c.trust !== 'CONFLICT' && c.trust !== 'MISSING EVIDENCE').length;
+  const apprN = items.filter(c => c.status === 'approved').length;
   let body = '';
-  if (key === 'decisions') {
-    const open = {};
-    items.filter(c => c.trust === 'CONFLICT' && c.status === 'pending').forEach(c => (open[c.conflict_group] = open[c.conflict_group] || []).push(c));
-    body += Object.entries(open).map(([g, it]) => conflictBox(g, it, locked)).join('');
-    body += items.filter(c => !(c.trust === 'CONFLICT' && c.status === 'pending')).map(c => claimCard(c, locked)).join('');
-  } else {
-    body = items.map(c => claimCard(c, locked)).join('');
+  if (isOpen) {
+    if (key === 'decisions') {
+      const open = {};
+      items.filter(c => c.trust === 'CONFLICT' && c.status === 'pending').forEach(c => (open[c.conflict_group] = open[c.conflict_group] || []).push(c));
+      body += Object.entries(open).map(([g, it]) => conflictBox(g, it, locked)).join('');
+      body += items.filter(c => !(c.trust === 'CONFLICT' && c.status === 'pending')).map(c => claimCard(c, locked)).join('');
+    } else if (key === 'unfinished') {
+      for (const [attr, label] of ATTR_GROUPS) {
+        const g = items.filter(c => c.attribute === attr);
+        if (g.length) body += `<div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 pt-1">${label} · ${g.length}</div>` + g.map(c => claimCard(c, locked)).join('');
+      }
+      const other = items.filter(c => !ATTR_GROUPS.some(a => a[0] === c.attribute));
+      body += other.map(c => claimCard(c, locked)).join('');
+    } else body = items.map(c => claimCard(c, locked)).join('');
   }
-  return `<section class="space-y-2"><div><h3 class="font-semibold">${title} <span class="text-xs text-slate-400 font-normal">(${items.length})</span></h3>
-    <p class="text-xs text-slate-500">${sub}</p></div>${body}</section>`;
+  const bulk = S.role === 'leaver' && !locked && pend ? `<button data-act="bulk" data-key="${key}" class="tip btn border-emerald-300 text-emerald-700 hover:bg-emerald-50" data-tip="Approve the ${pend} pending claim(s) in this section in one click. You can still reject or edit any of them later.">✓ Approve ${pend}</button>` : '';
+  return `<section id="sec-${key}" class="space-y-2">
+    <div class="flex items-center gap-2 bg-white border rounded-xl px-3 py-2 cursor-pointer hover:bg-slate-50" data-act="toggle" data-key="${key}">
+      <span class="text-xl">${icon}</span>
+      <div class="flex-1 min-w-0"><div class="font-bold">${title} <span class="text-xs text-slate-400 font-normal">${items.length} item${items.length > 1 ? 's' : ''}${S.role !== 'successor' ? ` · ${apprN} approved` : ''}</span></div>
+        <div class="text-xs text-slate-500">${sub}</div></div>
+      ${bulk}<span class="text-slate-400 text-sm w-4 text-center">${isOpen ? '▾' : '▸'}</span></div>
+    ${body ? `<div class="space-y-2 pl-1">${body}</div>` : ''}</section>`;
 }
 
+/* ---------- roadmap, steps, panels ---------- */
 function roadmap(b) {
   const items = [];
-  (b.decisions || []).filter(c => c.trust === 'CONFLICT').forEach(c => c.suggested && items.push(['Confirm which is current: ' + c.conflict_group, c]));
-  (b.unfinished || []).slice(0, 4).forEach(c => items.push([c.text, c]));
-  (b.risks || []).slice(0, 2).forEach(c => items.push([c.text, c]));
-  (b.gaps || []).slice(0, 2).forEach(c => items.push(['Find out: ' + c.text.replace('No source answers: ', ''), c]));
+  const conf = (b.decisions || []).filter(c => c.trust === 'CONFLICT' && c.status === 'pending');
+  if (conf.length) {
+    const g = conf[0].conflict_group.split('/');
+    items.push(['Decide', `Which ${g[1]} does ${g[0]} use today: ${[...new Set(conf.map(c => c.value))].join(' or ')}?`, conf[0]]);
+  }
+  (b.unfinished || []).filter(c => c.attribute === 'unmerged branch').slice(0, 3).forEach(c => items.push(['Finish', c.text, c]));
+  (b.unfinished || []).filter(c => c.attribute === 'open PR').slice(0, 1).forEach(c => items.push(['Finish', c.text, c]));
+  const r = (b.risks || [])[0];
+  if (r) items.push(['Protect', `${b.risks.length} file(s) only one person understands. Start with: ${r.text.replace(/ has only ever.*/, '')}`, r]);
+  (b.gaps || []).slice(0, 2).forEach(c => items.push(['Find out', c.text.replace('No source answers: ', ''), c]));
   return items.slice(0, 8);
 }
+const TAG = {Decide: 'bg-amber-100 text-amber-800', Finish: 'bg-indigo-100 text-indigo-800', Protect: 'bg-violet-100 text-violet-800', 'Find out': 'bg-rose-100 text-rose-800'};
 
-function checklist(d) {
-  const st = d.stats, locked = d.project.status === 'locked';
-  const row = (ok, t) => `<li class="flex items-center gap-2"><span class="${ok ? 'text-emerald-600' : 'text-slate-300'}">${ok ? '●' : '○'}</span><span class="${ok ? '' : 'text-slate-600'}">${t}</span></li>`;
-  return `<ul class="text-sm space-y-1">
-    ${row(true, `Exports ingested · ${d.redactions.length} secret(s) masked`)}
-    ${row(st.debrief_answered > 0, `Debrief answered (${st.debrief_answered}/${d.debrief.length})`)}
-    ${row(st.open_conflicts === 0, `Conflicts resolved (${st.open_conflicts} open)`)}
-    ${row(st.pending === 0, `Claims reviewed (${st.pending} pending)`)}
-    ${row(locked, 'Locked & released to successor')}</ul>`;
+function steps(d) {
+  const st = d.stats, b = d.buckets, locked = d.project.status === 'locked';
+  const all = allClaims(d);
+  const reviewPending = all.filter(c => c.status === 'pending' && c.trust !== 'CONFLICT' && c.trust !== 'MISSING EVIDENCE').length;
+  const gapsOpen = (b.gaps || []).filter(c => c.status === 'pending').length;
+  const list = [
+    {n: 1, t: 'Debrief', done: st.debrief_answered >= d.debrief.length && d.debrief.length > 0, sub: `${st.debrief_answered}/${d.debrief.length} answered`, go: '#debriefBox', tip: 'Answer 3 questions about things no document captured.'},
+    {n: 2, t: 'Resolve conflicts', done: st.open_conflicts === 0, sub: st.open_conflicts ? `${st.open_conflicts} open` : 'none open', go: '#conflictBox', tip: 'Pick the current truth when sources disagree. Required before release.'},
+    {n: 3, t: 'Fill the gaps', done: gapsOpen === 0, sub: `${gapsOpen} open`, go: '#sec-gaps', tip: 'Answer or dismiss the "nobody documented this" items.'},
+    {n: 4, t: 'Approve claims', done: reviewPending === 0, sub: `${reviewPending} pending`, go: '#sec-decisions', tip: 'Approve what is true, reject what is not, edit what is close.'},
+    {n: 5, t: 'Release', done: locked, sub: locked ? 'released' : 'ready when 2 is done', go: '#releaseBox', tip: 'Lock the dossier and hand it to the successor.'}
+  ];
+  const cur = list.findIndex(s => !s.done);
+  list.forEach((s, i) => s.state = s.done ? 'done' : (i === cur ? 'now' : 'todo'));
+  return list;
+}
+function stepper(d) {
+  const sp = steps(d), done = sp.filter(s => s.done).length, pct = Math.round(done / 5 * 100);
+  const R = 26, C = 2 * Math.PI * R;
+  return `<div id="stepper" class="bg-white border rounded-2xl p-4 flex flex-wrap items-center gap-4">
+    <div class="relative w-16 h-16 shrink-0 tip" data-tip="Overall handover progress."><svg viewBox="0 0 64 64" class="w-16 h-16 -rotate-90">
+      <circle cx="32" cy="32" r="${R}" fill="none" stroke="#e2e8f0" stroke-width="7"/>
+      <circle cx="32" cy="32" r="${R}" fill="none" stroke="#6366f1" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct / 100)}" style="transition:all .6s"/></svg>
+      <div class="absolute inset-0 grid place-items-center text-sm font-extrabold text-indigo-700">${pct}%</div></div>
+    <div class="flex-1 min-w-[260px] grid grid-cols-5 gap-2">${sp.map(s => `<button data-act="go" data-sel="${s.go}" class="tip text-left" data-tip="${esc(s.tip)}">
+        <div class="flex items-center gap-1.5"><span class="w-6 h-6 rounded-full border grid place-items-center text-xs font-bold step-${s.state}">${s.done ? '✓' : s.n}</span>
+        <span class="text-xs font-semibold ${s.state === 'todo' ? 'text-slate-400' : 'text-slate-800'} leading-tight">${s.t}</span></div>
+        <div class="text-[11px] text-slate-400 pl-7">${esc(s.sub)}</div></button>`).join('')}</div></div>`;
+}
+function legend() {
+  if (!S.guide) return `<button data-act="guide" class="text-xs text-indigo-600 underline">Show "how to read this page"</button>`;
+  return `<section id="legend" class="bg-white border rounded-2xl p-4">
+    <div class="flex items-center justify-between"><h3 class="font-bold">🧭 How to read this page</h3><button data-act="guide" class="text-xs text-slate-500 hover:text-slate-800">hide</button></div>
+    <p class="text-xs text-slate-500 mt-1">Every card is a <b>claim</b> about the project. The coloured label says how much to trust it. Hover anything for help.</p>
+    <div class="grid sm:grid-cols-2 gap-x-4 gap-y-1.5 mt-3">${Object.entries(TRUST_HELP).map(([k, [i, t]]) => `<div class="flex gap-2 items-start text-xs"><span class="shrink-0 font-bold px-1.5 py-0.5 rounded ${BADGE[k]}">${i} ${k}</span><span class="text-slate-600">${esc(t)}</span></div>`).join('')}</div>
+    <div class="mt-3 pt-3 border-t grid sm:grid-cols-2 gap-1.5 text-xs text-slate-600">
+      <div><b class="text-emerald-700">✓ Approve</b>: this is accurate, the successor may see it.</div><div><b class="text-rose-700">✕ Reject</b>: wrong, never shown.</div>
+      <div><b>✎ Edit</b>: fix the wording; the original is kept.</div><div><b>👁 Shared / 🔒 Manager only</b>: who may read it.</div>
+      <div><b>🔎 source pill</b>: opens the original proof on the right.</div><div><b class="text-indigo-700">Lock &amp; release</b>: freezes it and unlocks the successor view.</div></div></section>`;
+}
+function debriefBox(d, locked) {
+  if (S.role !== 'leaver' || locked) return '';
+  return `<section id="debriefBox" class="bg-white border rounded-2xl p-4">
+    <h3 class="font-bold">🎤 3-question debrief</h3>
+    <p class="text-xs text-slate-500 mb-3">Questions are generated from your dormant branches. Whatever you type becomes a <span class="px-1 rounded ${BADGE['STATED BY LEAVER']}">STATED BY LEAVER</span> claim: knowledge that never made it into a commit or chat.</p>
+    <div class="space-y-3">${d.debrief.map(q => `<div><label class="text-sm font-medium block mb-1">${q.idx}. ${esc(q.question)}</label>
+      <textarea data-q="${q.idx}" rows="2" placeholder="Short and honest beats perfect." class="w-full border rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">${esc(q.answer)}</textarea></div>`).join('')}</div>
+    <button data-act="debrief" class="tip mt-3 btn bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 !text-sm !px-3 !py-1.5" data-tip="Saves your answers as claims. You can edit and re-save any time before release.">Save answers</button></section>`;
+}
+function releasePanel(d) {
+  const all = allClaims(d);
+  const willSee = all.filter(c => c.status === 'approved' && c.visibility === 'all').length;
+  const mgr = all.filter(c => c.status === 'approved' && c.visibility === 'manager').length;
+  const rej = all.filter(c => c.status === 'rejected').length;
+  const pend = all.filter(c => c.status === 'pending').length;
+  return `<section id="releaseBox" class="rounded-2xl p-4 text-white bg-gradient-to-br from-slate-900 to-indigo-900">
+    <h3 class="font-bold">🚀 Release to successor</h3>
+    <p class="text-xs text-indigo-200 mb-3">This is exactly what the next person will receive. Nothing else leaks through, enforced on the server.</p>
+    <div class="grid grid-cols-4 gap-2 text-center">
+      <div class="bg-white/10 rounded-xl py-2"><div class="text-2xl font-extrabold text-emerald-300">${willSee}</div><div class="text-[11px] text-indigo-100">successor will see</div></div>
+      <div class="bg-white/10 rounded-xl py-2"><div class="text-2xl font-extrabold text-amber-300">${mgr}</div><div class="text-[11px] text-indigo-100">manager only</div></div>
+      <div class="bg-white/10 rounded-xl py-2"><div class="text-2xl font-extrabold text-rose-300">${rej}</div><div class="text-[11px] text-indigo-100">rejected</div></div>
+      <div class="bg-white/10 rounded-xl py-2"><div class="text-2xl font-extrabold text-slate-200">${pend}</div><div class="text-[11px] text-indigo-100">undecided (not sent)</div></div></div>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button data-act="approveAll" class="tip btn !text-sm !px-3 !py-1.5 border-white/40 text-white hover:bg-white/10" data-tip="Approves every pending claim except conflicts and missing-evidence items, which need a human answer.">✓ Approve all remaining</button>
+      <button data-act="lock" class="tip btn !text-sm !px-3 !py-1.5 bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-400" data-tip="Freezes the dossier and unlocks the Successor view. Blocked while conflicts are open.">🔒 Lock &amp; release</button></div>
+    <p class="text-[11px] text-indigo-200 mt-2">${d.stats.dropped_ungrounded} extracted claim(s) were dropped automatically because no verbatim source quote backed them.</p></section>`;
+}
+function roleStrip(d) {
+  const [i, h, t] = ROLE_INFO[d.role];
+  return `<div class="flex items-start gap-3 bg-white border rounded-2xl p-3"><div class="text-2xl">${i}</div>
+    <div class="text-sm"><b>${h}</b> <span class="text-slate-600">${t}</span></div></div>`;
 }
 
+/* ---------- main render ---------- */
 function render() {
   const app = $('#app');
   if (S.err) {
-    app.innerHTML = `<div class="bg-white border rounded p-6 max-w-xl mx-auto mt-10 text-center">
-      <div class="text-3xl mb-2">🔒</div><p class="font-medium mb-1">${esc(S.err)}</p>
-      <p class="text-sm text-slate-500">Switch the role to "Outgoing contributor" to review and release this dossier.</p></div>`;
+    const fresh = /not been released/i.test(S.err);
+    app.innerHTML = `<div class="bg-white border rounded-2xl p-8 max-w-xl mx-auto mt-10 text-center pop">
+      <div class="text-5xl mb-2">🔒</div><p class="font-bold text-lg mb-1">${fresh ? 'Not released yet' : 'Access blocked'}</p>
+      <p class="text-sm text-slate-600 mb-4">${esc(S.err)}</p>
+      <p class="text-xs text-slate-500 mb-4">This is the server doing its job: a successor cannot see anything until the leaver locks the dossier.</p>
+      <button data-act="asLeaver" class="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm">Switch to Outgoing contributor</button></div>`;
     return;
   }
   const d = S.data;
   if (!d) {
-    app.innerHTML = `<div class="bg-white border rounded p-8 max-w-2xl mx-auto mt-10 text-center">
-      <h1 class="text-2xl font-bold mb-2">Hand over a project without the chat archaeology</h1>
-      <p class="text-slate-600 mb-4">Upload GitHub, Slack and Jira exports, or start from the built-in sample project.</p>
-      <button id="btnDemo2" class="bg-indigo-600 text-white rounded px-4 py-2">Load sample project</button></div>`;
+    app.innerHTML = `<div class="hero-bg rounded-3xl border p-10 max-w-4xl mx-auto mt-6 text-center pop">
+      <h1 class="text-4xl font-extrabold text-slate-900">Hand over a project <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-fuchsia-500">without the chat archaeology</span></h1>
+      <p class="text-slate-600 mt-3 max-w-2xl mx-auto">RelayTrace turns GitHub, Slack and Jira exports into a handover where every claim has a receipt.</p>
+      <div class="grid sm:grid-cols-3 gap-3 mt-6 text-left text-sm">
+        <div class="bg-white/80 border rounded-xl p-3">🛡️ <b>Secrets masked</b><br><span class="text-slate-500">Before anything is stored.</span></div>
+        <div class="bg-white/80 border rounded-xl p-3">🔎 <b>Proof for every claim</b><br><span class="text-slate-500">Verbatim quote or it is dropped.</span></div>
+        <div class="bg-white/80 border rounded-xl p-3">🎯 <b>Role-filtered release</b><br><span class="text-slate-500">Successor sees only what is approved.</span></div></div>
+      <button id="btnDemo2" class="mt-6 bg-gradient-to-r from-indigo-600 to-fuchsia-500 text-white font-semibold rounded-xl px-6 py-3 hover:opacity-90">Load the sample project</button></div>`;
     $('#btnDemo2').onclick = createDemo;
     return;
   }
-  const locked = d.project.status === 'locked';
-  const leaver = d.role === 'leaver';
-  const road = roadmap(d.buckets);
-  const left = BUCKETS.map(([k, t, s]) => bucketHtml(k, t, s, d.buckets[k], locked)).join('') ||
+  const locked = d.project.status === 'locked', leaver = d.role === 'leaver', b = d.buckets;
+  const road = roadmap(b);
+  const roadmapHtml = road.length ? `<section id="roadmap" class="bg-gradient-to-br from-indigo-50 to-white border border-indigo-200 rounded-2xl p-4">
+      <h3 class="font-bold text-indigo-900">🗺️ Day-1 continuation roadmap</h3>
+      <p class="text-xs text-slate-500">${d.role === 'successor' ? 'Start here. Click a line to see its proof.' : 'What the successor should do first, built automatically. Click a line to see its proof.'}</p>
+      <ol class="mt-3 space-y-2">${road.map(([tag, t, c], i) => `<li class="flex gap-2 items-start">
+        <span class="w-6 h-6 shrink-0 rounded-full bg-indigo-600 text-white text-xs font-bold grid place-items-center">${i + 1}</span>
+        <button ${c.source ? `data-act="src" data-id="${c.source.id}" data-claim="${c.id}"` : 'data-act="noop"'} class="text-left text-sm hover:underline flex-1"><span class="text-[10px] font-bold px-1.5 py-0.5 rounded mr-1 ${TAG[tag]}">${tag}</span>${fmt(t)}</button></li>`).join('')}</ol></section>` : '';
+  const sections = BUCKETS.map(([k, i, t, s]) => section(k, i, t, s, b[k], locked, d)).join('') ||
     '<p class="text-sm text-slate-500">Nothing approved yet.</p>';
-
-  const debrief = leaver && !locked ? `<section class="bg-white border rounded p-4">
-      <h3 class="font-semibold">3-question debrief</h3>
-      <p class="text-xs text-slate-500 mb-3">Context that never made it into a commit or a chat. Your answers become [STATED BY LEAVER] claims.</p>
-      <div class="space-y-3">${d.debrief.map(q => `<div><label class="text-sm font-medium block mb-1">${q.idx}. ${esc(q.question)}</label>
-        <textarea data-q="${q.idx}" rows="3" class="w-full border rounded p-2 text-sm">${esc(q.answer)}</textarea></div>`).join('')}</div>
-      <button data-act="debrief" class="mt-3 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded">Save answers</button></section>` : '';
-
-  const redactions = d.role !== 'successor' && d.redactions.length ? `<details class="bg-white border rounded p-3 text-sm">
-      <summary class="cursor-pointer font-medium">🛡 ${d.redactions.length} secret(s) masked before storage</summary>
+  const redactions = d.role !== 'successor' && d.redactions.length ? `<details class="bg-white border rounded-2xl p-3 text-sm">
+      <summary class="cursor-pointer font-medium">🛡️ ${d.redactions.length} secret(s) masked before storage <span class="text-xs text-slate-400 font-normal">(click to see what and where; the secrets themselves are never stored)</span></summary>
       <ul class="mt-2 text-xs text-slate-600 space-y-0.5">${d.redactions.map(r => `<li><b>${esc(r.kind)}</b> in <code>${esc(r.location)}</code></li>`).join('')}</ul></details>` : '';
-
-  const roadmapHtml = road.length ? `<section class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-      <h3 class="font-semibold text-indigo-900">Day-1 continuation roadmap</h3>
-      <ol class="mt-2 space-y-1.5 text-sm list-decimal list-inside">${road.map(([t, c]) => `<li><button data-act="src" data-id="${c.source ? c.source.id : ''}" data-claim="${c.id}" class="text-left hover:underline">${esc(t)}</button></li>`).join('')}</ol></section>` : '';
-
-  const actions = leaver && !locked ? `<section class="bg-white border rounded p-4 space-y-3">
-      <h3 class="font-semibold">Review progress</h3>${checklist(d)}
-      <div class="flex flex-wrap gap-2">
-        <button data-act="approveAll" class="px-3 py-1.5 text-sm border rounded hover:bg-slate-50">Approve all remaining</button>
-        <button data-act="lock" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700">Lock & release to successor</button>
-      </div><p class="text-xs text-slate-500">Successors only see approved claims marked "Visible to successor". ${d.stats.dropped_ungrounded} extracted claim(s) were dropped for lacking a verbatim source quote.</p></section>` : '';
-
-  const banner = locked ? `<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded p-3">Handover released ${esc((d.project.locked_at || '').slice(0, 10))}. ${leaver ? 'The dossier is now read-only.' : ''}</div>` :
-    (d.role === 'manager' ? `<div class="bg-slate-100 border text-sm rounded p-3 text-slate-600">Manager view: you see every claim, including rejected and manager-only ones. Successors see only what is approved and shared.</div>` : '');
-
-  $('#app').innerHTML = `
-    <div class="mb-4"><h1 class="text-xl font-bold">${esc(d.project.name)}</h1>
-      <p class="text-sm text-slate-500">Handover from <b>${esc(d.project.leaver)}</b> · evidence up to ${esc((d.project.as_of || '').slice(0, 10))} · viewing as <b>${esc(d.role)}</b></p></div>
+  const banner = locked ? `<div class="bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm rounded-2xl p-3 flex flex-wrap items-center gap-3">
+      <span class="text-xl">✅</span><span class="flex-1">Handover released on ${esc((d.project.locked_at || '').slice(0, 10))}. ${leaver ? 'The dossier is now read-only.' : ''}</span>
+      ${leaver ? '<button data-act="asSuccessor" class="btn !text-sm !px-3 !py-1.5 bg-emerald-600 border-emerald-600 text-white">See what the successor sees →</button>' : ''}</div>` : '';
+  app.innerHTML = `
+    <div class="mb-4 flex flex-wrap items-end gap-3"><div class="flex-1"><h1 class="text-2xl font-extrabold text-slate-900">${esc(d.project.name)}</h1>
+      <p class="text-sm text-slate-500">Handover from <b>${esc(d.project.leaver)}</b> · evidence up to ${esc((d.project.as_of || '').slice(0, 10))}</p></div></div>
     <div class="grid lg:grid-cols-5 gap-4 items-start">
-      <div class="lg:col-span-3 space-y-4">${banner}${roadmapHtml}${debrief}${actions}${redactions}${left}</div>
-      <aside class="lg:col-span-2 lg:sticky lg:top-16"><div id="inspector" class="bg-white border rounded-lg overflow-hidden"></div></aside>
+      <div class="lg:col-span-3 space-y-3">${roleStrip(d)}${banner}${leaver && !locked ? stepper(d) : ''}${legend()}${roadmapHtml}${debriefBox(d, locked)}${leaver && !locked ? releasePanel(d) : ''}${redactions}${sections}</div>
+      <aside class="lg:col-span-2 lg:sticky lg:top-20"><div id="inspector" class="bg-white border rounded-2xl overflow-hidden"></div></aside>
     </div>`;
   renderInspector();
 }
 
 function renderInspector() {
-  const el = $('#inspector');
-  if (!el) return;
+  const el = $('#inspector'); if (!el) return;
   const s = S.selSource;
   if (!s) {
-    el.innerHTML = `<div class="p-6 text-sm text-slate-500"><p class="font-medium text-slate-700 mb-1">Evidence inspector</p>
-      Click any source link on a claim to see the original commit, PR thread, ticket or chat message — with the quoted passage highlighted.</div>`;
+    el.innerHTML = `<div class="p-6 text-sm text-slate-500"><div class="text-3xl mb-2">🔎</div><p class="font-bold text-slate-800 mb-1">Evidence inspector</p>
+      Click any <span class="px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700">🔎 source</span> pill to open the original commit, PR, ticket or chat message here, with the quoted proof <mark>highlighted</mark>.</div>`;
     return;
   }
-  const hl = (text) => {
-    for (const q of s.highlights || []) {
-      const i = text.indexOf(q);
-      if (i >= 0) return esc(text.slice(0, i)) + '<mark>' + esc(q) + '</mark>' + esc(text.slice(i + q.length));
-    }
+  const hl = text => {
+    for (const q of s.highlights || []) { const i = text.indexOf(q); if (i >= 0) return esc(text.slice(0, i)) + '<mark>' + esc(q) + '</mark>' + esc(text.slice(i + q.length)); }
     return esc(text);
   };
-  const m = s.meta || {};
-  let extra = '';
-  if (s.type === 'commit') {
-    extra = `<div class="text-xs text-slate-500 mt-3">sha <code>${esc((m.sha || '').slice(0, 12))}</code> · branch <code>${esc(m.branch)}</code></div>
-      <div class="text-xs mt-2"><b>Files:</b> ${(m.files || []).map(f => `<code class="bg-slate-100 px-1 rounded mr-1">${esc(f)}</code>`).join('')}</div>
-      ${m.patch ? `<pre class="mt-3 text-xs bg-slate-900 text-slate-100 rounded p-3 overflow-auto max-h-72">${esc(m.patch)}</pre>` : ''}`;
-  } else if (s.type === 'slack') {
-    extra = `<div class="mt-3 text-xs text-slate-500">Conversation context</div><div class="mt-1 space-y-1">${(m.context || []).map(x =>
+  const m = s.meta || {}; let extra = '';
+  const files = fs => (fs || []).map(f => `<code class="mr-1">${esc(f)}</code>`).join('');
+  if (s.type === 'commit') extra = `<div class="text-xs text-slate-500 mt-3">sha <code>${esc((m.sha || '').slice(0, 12))}</code> · branch <code>${esc(m.branch)}</code></div>
+      <div class="text-xs mt-2"><b>Files:</b> ${files(m.files)}</div>${m.patch ? `<pre class="mt-3 text-xs bg-slate-900 text-slate-100 rounded-lg p-3 overflow-auto max-h-72">${esc(m.patch)}</pre>` : ''}`;
+  else if (s.type === 'slack') extra = `<div class="mt-3 text-xs text-slate-500">Conversation context</div><div class="mt-1 space-y-1">${(m.context || []).map(x =>
       `<div class="text-xs border-l-2 pl-2 ${x.text === s.text && x.ts === s.ts ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 text-slate-500'}"><b>${esc(x.author)}</b> ${esc(x.ts.slice(0, 16).replace('T', ' '))}<br>${esc(x.text)}</div>`).join('')}</div>`;
-  } else if (s.type === 'pr') {
-    extra = `<div class="mt-3 text-xs text-slate-500">${m.state ? 'state: ' + esc(m.state) : ''} ${(m.reviewers || []).length ? '· reviewers: ' + esc(m.reviewers.join(', ')) : ''}</div>
-      ${(m.files || []).length ? `<div class="text-xs mt-1"><b>Files:</b> ${m.files.map(f => `<code class="bg-slate-100 px-1 rounded mr-1">${esc(f)}</code>`).join('')}</div>` : ''}`;
-  } else if (s.type === 'issue') {
-    extra = `<div class="mt-3 text-xs text-slate-500">status: ${esc(m.status)} · assignee: ${esc(m.assignee)} · reporter: ${esc(m.reporter)}</div>`;
-  }
-  el.innerHTML = `<div class="px-4 py-2 border-b bg-slate-50 flex items-center justify-between">
-      <div class="text-sm font-medium">${esc(s.type.toUpperCase())} · ${esc(s.ref)}</div>
-      <button data-act="closeSrc" class="text-xs text-slate-500 hover:text-slate-800">close</button></div>
+  else if (s.type === 'pr') extra = `<div class="mt-3 text-xs text-slate-500">${m.state ? 'state: ' + esc(m.state) : ''} ${(m.reviewers || []).length ? '· reviewers: ' + esc(m.reviewers.join(', ')) : ''}</div>${(m.files || []).length ? `<div class="text-xs mt-1"><b>Files:</b> ${files(m.files)}</div>` : ''}`;
+  else if (s.type === 'issue') extra = `<div class="mt-3 text-xs text-slate-500">status: ${esc(m.status)} · assignee: ${esc(m.assignee)} · reporter: ${esc(m.reporter)}</div>`;
+  el.innerHTML = `<div class="px-4 py-2 border-b bg-slate-50 flex items-center justify-between"><div class="text-sm font-bold">${esc(s.type.toUpperCase())} · ${esc(s.ref)}</div>
+      <button data-act="closeSrc" class="text-xs text-slate-500 hover:text-slate-800">✕ close</button></div>
     <div class="p-4"><div class="text-xs text-slate-500 mb-2">${esc(s.author)} · ${esc((s.ts || '').replace('T', ' ').replace('Z', ' UTC'))}</div>
     <pre class="text-sm font-sans">${hl(s.text)}</pre>${extra}</div>`;
 }
-
 async function openSource(id, claimId) {
   if (!id) return;
   try {
-    S.selSource = await api('/sources/' + id);
-    S.selClaim = Number(claimId) || null;
+    S.selSource = await api('/sources/' + id); S.selClaim = Number(claimId) || null;
     document.querySelectorAll('[data-card]').forEach(e => e.classList.toggle('sel', Number(e.dataset.card) === S.selClaim));
     renderInspector();
+    if (window.innerWidth < 1024) $('#inspector').scrollIntoView({behavior: 'smooth', block: 'center'});
   } catch (e) { toast(e.message, true); }
 }
-
 async function createDemo() {
-  try {
-    const r = await post('/demo');
-    S.selSource = null;
-    await loadProjects(r.id);
-    await loadDossier();
-    toast('Sample project loaded');
-  } catch (e) { toast(e.message, true); }
+  try { const r = await post('/demo'); S.selSource = null; await loadProjects(r.id); await loadDossier(); toast('Fresh sample project loaded'); }
+  catch (e) { toast(e.message, true); }
+}
+function confetti() {
+  const em = ['🎉', '✨', '🎊', '🚀', '💜'];
+  for (let i = 0; i < 70; i++) {
+    const s = document.createElement('span'); s.className = 'confetti'; s.textContent = em[i % em.length];
+    s.style.left = Math.random() * 100 + 'vw'; s.style.animationDelay = Math.random() * 1.2 + 's';
+    document.body.appendChild(s); setTimeout(() => s.remove(), 5000);
+  }
 }
 
+/* ---------- actions ---------- */
 async function act(el) {
   const a = el.dataset.act, id = el.dataset.id;
   try {
     if (a === 'src') return openSource(id, el.dataset.claim);
+    if (a === 'noop') return;
     if (a === 'closeSrc') { S.selSource = null; S.selClaim = null; return render(); }
+    if (a === 'toggle') { S.open[el.dataset.key] = !S.open[el.dataset.key]; return render(); }
+    if (a === 'guide') { S.guide = !S.guide; try { localStorage.setItem('rt_guide', S.guide ? '1' : '0'); } catch (e) {} return render(); }
+    if (a === 'go') { const t = document.querySelector(el.dataset.sel); if (t) t.scrollIntoView({behavior: 'smooth', block: 'center'}); else toast('Nothing to do here. This step is already clear.'); return; }
+    if (a === 'tour') return startTour();
+    if (a === 'asLeaver') { $('#roleSel').value = S.role = 'leaver'; return loadDossier(); }
+    if (a === 'asSuccessor') { $('#roleSel').value = S.role = 'successor'; S.selSource = null; return loadDossier(); }
     if (a === 'approve' || a === 'reject' || a === 'reset') await post(`/claims/${id}/action`, {action: a});
     else if (a === 'vis') {
-      const c = Object.values(S.data.buckets).flat().find(x => x.id == id);
+      const c = allClaims(S.data).find(x => x.id == id);
       await post(`/claims/${id}/action`, {action: 'visibility', visibility: c.visibility === 'all' ? 'manager' : 'all'});
     } else if (a === 'edit') {
-      const c = Object.values(S.data.buckets).flat().find(x => x.id == id);
-      const t = prompt(c.trust === 'MISSING EVIDENCE' ? 'Your answer (becomes a [STATED BY LEAVER] claim):' : 'Edit this claim:', c.trust === 'MISSING EVIDENCE' ? '' : c.text);
+      const c = allClaims(S.data).find(x => x.id == id), gap = c.trust === 'MISSING EVIDENCE';
+      const t = await dialog({title: gap ? 'Answer this question' : 'Edit this claim', desc: gap ? c.text.replace('No source answers: ', '') + ' Your answer becomes a STATED BY LEAVER claim.' : 'Your wording replaces the text shown to the successor. The original stays visible to you and the manager.', text: gap ? '' : c.text, yes: 'Save'});
       if (!t || !t.trim()) return;
       await post(`/claims/${id}/action`, {action: 'edit', text: t});
-    } else if (a === 'winner') await post(`/claims/${id}/resolve`, {mode: 'winner'});
-    else if (a === 'unknown') await post(`/claims/${id}/resolve`, {mode: 'unknown'});
+    } else if (a === 'winner') { await post(`/claims/${id}/resolve`, {mode: 'winner'}); toast('Conflict resolved. The other side was rejected.'); }
+    else if (a === 'unknown') { await post(`/claims/${id}/resolve`, {mode: 'unknown'}); toast('Marked unknown and sent to the manager as a gap.'); }
     else if (a === 'debrief') {
-      const answers = {};
-      document.querySelectorAll('textarea[data-q]').forEach(t => answers[t.dataset.q] = t.value);
-      const r = await post(`/projects/${S.pid}/debrief`, {answers});
-      toast(`${r.saved} answer(s) saved as claims`);
-    } else if (a === 'approveAll') {
-      const r = await post(`/projects/${S.pid}/approve-all`);
-      toast(`${r.approved} claim(s) approved`);
+      const answers = {}; document.querySelectorAll('textarea[data-q]').forEach(t => answers[t.dataset.q] = t.value);
+      const r = await post(`/projects/${S.pid}/debrief`, {answers}); toast(`${r.saved} answer(s) saved as STATED BY LEAVER claims`);
+    } else if (a === 'approveAll') { const r = await post(`/projects/${S.pid}/approve-all`); toast(`${r.approved} claim(s) approved`); }
+    else if (a === 'bulk') {
+      const items = S.data.buckets[el.dataset.key].filter(c => c.status === 'pending' && c.trust !== 'CONFLICT' && c.trust !== 'MISSING EVIDENCE');
+      for (const c of items) await post(`/claims/${c.id}/action`, {action: 'approve'});
+      toast(`${items.length} claim(s) approved`);
     } else if (a === 'lock') {
-      if (!confirm('Lock the dossier and release it to the successor? This cannot be undone.')) return;
-      await post(`/projects/${S.pid}/lock`);
-      toast('Handover released');
+      const ok = await dialog({title: 'Release to the successor?', desc: 'The dossier becomes read-only and the successor can see every approved, shared claim. This cannot be undone.', yes: '🔒 Lock & release', danger: true});
+      if (!ok) return;
+      await post(`/projects/${S.pid}/lock`); toast('Handover released 🎉'); confetti();
     }
     await loadDossier();
   } catch (e) { toast(e.message, true); }
 }
 
-document.addEventListener('click', e => {
-  const el = e.target.closest('[data-act]');
-  if (el) act(el);
-});
+/* ---------- guided tour ---------- */
+const TOUR = [
+  {sel: '#roleBox', t: 'Three people, one dossier', x: 'Switch roles here. The leaver edits, the manager oversees, the successor only sees what was approved. The server enforces this, not just the UI.'},
+  {sel: '#stepper', t: 'Your 5-step checklist', x: 'Progress updates live. Click any step to jump to it. Conflicts must be resolved before you can release.'},
+  {sel: '#roadmap', t: 'Day-1 roadmap', x: 'The first things a successor should do, generated from unmerged branches, open PRs, risky files and unanswered questions. Each line opens its proof.'},
+  {sel: '#conflictBox', t: 'Conflict detection', x: 'Slack says Redis, a Jira ticket says Kafka. RelayTrace will not guess: it shows both receipts, suggests the newest strongest source, and asks a human.'},
+  {sel: '[data-card] .tip', t: 'Trust labels', x: 'Every claim says how it is known: quoted from a source, stated by the leaver, inferred from patterns, in conflict, or missing. Hover any label.'},
+  {sel: '#inspector', t: 'Evidence inspector', x: 'Click a 🔎 source pill on any claim. The original commit, PR, ticket or chat opens here with the exact quote highlighted. No quote, no claim.'},
+  {sel: '#releaseBox', t: 'Release with confidence', x: 'This panel shows exactly how many claims the successor will see. Lock & release, then switch the role to Successor to see their view.'}
+];
+let tour = {steps: [], i: 0};
+function startTour() {
+  if (!S.data) { toast('Load the sample project first, then take the tour.'); return; }
+  if (S.role !== 'leaver') { $('#roleSel').value = S.role = 'leaver'; S.selSource = null; loadDossier().then(startTour); return; }
+  tour.steps = TOUR.filter(s => document.querySelector(s.sel)); tour.i = 0;
+  $('#tourLayer').classList.remove('hidden'); showTour();
+}
+function showTour() {
+  const s = tour.steps[tour.i]; if (!s) return endTour();
+  const el = document.querySelector(s.sel); el.scrollIntoView({block: 'center', behavior: 'smooth'});
+  setTimeout(() => {
+    const r = el.getBoundingClientRect(), sp = $('#spot'), pad = 8;
+    sp.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px`;
+    const card = $('#tourCard'), last = tour.i === tour.steps.length - 1;
+    card.innerHTML = `<div class="text-[11px] text-indigo-600 font-bold">STEP ${tour.i + 1} OF ${tour.steps.length}</div><div class="font-bold mt-0.5">${s.t}</div>
+      <p class="text-sm text-slate-600 mt-1">${s.x}</p><div class="flex justify-between mt-3"><button id="tSkip" class="text-xs text-slate-500">Skip tour</button>
+      <div class="flex gap-2">${tour.i ? '<button id="tBack" class="btn border-slate-300">Back</button>' : ''}<button id="tNext" class="btn bg-indigo-600 border-indigo-600 text-white">${last ? 'Finish ✓' : 'Next →'}</button></div></div>`;
+    const below = r.bottom + 12 + 190 < window.innerHeight;
+    card.style.top = (below ? r.bottom + 14 : Math.max(10, r.top - 200)) + 'px';
+    card.style.left = Math.min(Math.max(10, r.left), window.innerWidth - 350) + 'px';
+    $('#tNext').onclick = () => { tour.i++; showTour(); };
+    $('#tSkip').onclick = endTour; if ($('#tBack')) $('#tBack').onclick = () => { tour.i--; showTour(); };
+  }, 380);
+}
+function endTour() { $('#tourLayer').classList.add('hidden'); }
+
+/* ---------- wiring ---------- */
+document.addEventListener('click', e => { const el = e.target.closest('[data-act]'); if (el) { if (el.dataset.act === 'toggle' && e.target.closest('button:not([data-act="toggle"])')) { const inner = e.target.closest('button'); if (inner.dataset.act === 'bulk') return act(inner); } act(el); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { endTour(); $('#dlg').style.display = 'none'; $('#modal').style.display = 'none'; } });
 $('#roleSel').onchange = e => { S.role = e.target.value; S.selSource = null; S.selClaim = null; loadDossier(); };
 $('#projSel').onchange = e => { S.pid = e.target.value; S.selSource = null; loadDossier(); };
 $('#btnDemo').onclick = createDemo;
@@ -374,16 +545,9 @@ $('#upForm').onsubmit = async e => {
   e.preventDefault();
   const fd = new FormData(e.target);
   for (const k of ['github', 'slack', 'jira']) { const f = fd.get(k); if (f && !f.name) fd.delete(k); }
-  try {
-    const r = await api('/ingest', {method: 'POST', body: fd});
-    $('#modal').style.display = 'none';
-    S.selSource = null;
-    await loadProjects(r.id);
-    await loadDossier();
-    toast('Dossier built');
-  } catch (err) { toast(err.message, true); }
+  try { const r = await api('/ingest', {method: 'POST', body: fd}); $('#modal').style.display = 'none'; S.selSource = null; await loadProjects(r.id); await loadDossier(); toast('Dossier built'); }
+  catch (err) { toast(err.message, true); }
 };
-
 (async () => { await loadProjects(); await loadDossier(); })();
 </script>
 </body>

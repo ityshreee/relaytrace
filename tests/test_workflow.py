@@ -32,7 +32,8 @@ def test_full_workflow():
         assert [c["value"] for c in conf if c["suggested"]] == ["Kafka"]
 
         # dormant branches, bus factor, contacts, gaps
-        assert any("dormant" in c["text"] for c in b["unfinished"])
+        assert any("dormant for 56 days" in c["text"] for c in b["unfinished"])  # calendar days, not 55
+        assert any("(in PAY-151" in c["text"] for c in b["unfinished"])  # blockers keep their context
         assert any("reconcile.py" in c["text"] for c in b["risks"])
         assert any("priya reviewed 14" in c["text"] for c in b["contacts"])
         assert any(c["attribute"] == "deployment ownership" for c in b["gaps"])
