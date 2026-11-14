@@ -52,12 +52,28 @@
       </select></label>
     <button data-act="tour" class="text-sm font-semibold rounded-lg px-3 py-1.5 bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-white hover:opacity-90 tip" data-tip="A 60-second guided walkthrough that points at each part of the screen.">▶ Take the tour</button>
     <button id="btnDemo" class="text-sm border rounded-lg px-3 py-1.5 hover:bg-slate-100 tip" data-tip="Creates a fresh copy of the PayFlow-Core sample project so you can try the full flow again.">New demo project</button>
+    <button id="btnOut" class="text-sm border rounded-lg px-3 py-1.5 hover:bg-slate-100 tip" data-tip="Forget all role sign-ins on this browser tab.">Sign out</button>
     <button id="btnUpload" class="text-sm bg-slate-900 text-white rounded-lg px-3 py-1.5 hover:bg-slate-700 tip tip-r" data-tip="Bring your own GitHub JSON, Slack JSON and Jira/Linear CSV. Secrets are masked before storage.">⬆ Upload exports</button>
   </div>
 </header>
 
 <div id="toast" class="fixed top-16 right-4 z-[90] hidden px-4 py-2 rounded-lg shadow-lg text-sm"></div>
 <main class="max-w-[1500px] mx-auto px-4 py-4"><div id="app"></div></main>
+
+<!-- sign-in -->
+<div id="login" class="fixed inset-0 z-[95] hidden items-center justify-center p-4 hero-bg overflow-auto">
+  <div class="w-full max-w-3xl pop">
+    <div class="text-center mb-5">
+      <div class="inline-grid w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-fuchsia-500 text-white font-black text-xl place-items-center">R</div>
+      <h1 class="text-3xl font-extrabold text-slate-900 mt-2">Sign in to RelayTrace</h1>
+      <p class="text-sm text-slate-600">Pick who you are. The server checks your PIN and then enforces what you can see and do.</p>
+    </div>
+    <div id="loginTiles" class="grid md:grid-cols-3 gap-3"></div>
+    <p id="loginErr" class="text-center text-sm text-rose-600 mt-3 h-5"></p>
+    <p class="text-center text-xs text-slate-500">Demo build: PINs are shown so judges can try every role. Real deployments set them with environment variables.</p>
+    <div class="text-center mt-2"><button id="loginClose" class="text-xs text-slate-500 underline hidden">Cancel</button></div>
+  </div>
+</div>
 
 <!-- generic dialog -->
 <div id="dlg" class="fixed inset-0 bg-black/45 z-[85] hidden items-center justify-center p-4">
@@ -98,9 +114,12 @@
 <div id="tourLayer" class="hidden"><div id="spot"></div><div id="tourCard" class="bg-white rounded-2xl shadow-2xl p-4 pop"></div></div>
 
 <script>
-const S = {role: 'leaver', pid: null, data: null, selSource: null, selClaim: null, err: null,
+const PIN_HINT = {leaver: '2468', manager: '1357', successor: '9753'};
+const S = {tokens: {}, audit: [], auditOpen: false, auditAll: false, role: 'leaver', pid: null, data: null, selSource: null, selClaim: null, err: null,
            open: {decisions: true, unfinished: true, risks: false, contacts: false, gaps: true}, guide: true};
 try { if (localStorage.getItem('rt_guide') === '0') S.guide = false; } catch (e) {}
+try { S.tokens = JSON.parse(sessionStorage.getItem('rt_tokens') || '{}'); } catch (e) {}
+const saveTokens = () => { try { sessionStorage.setItem('rt_tokens', JSON.stringify(S.tokens)); } catch (e) {} };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -139,10 +158,11 @@ function toast(msg, bad) {
 }
 
 async function api(path, opts = {}) {
-  const headers = {'X-Role': S.role, ...(opts.headers || {})};
+  const headers = {'X-Token': S.tokens[S.role] || '', ...(opts.headers || {})};
   if (opts.body && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
   const r = await fetch('/api' + path, {...opts, headers});
   let j = null; try { j = await r.json(); } catch (e) {}
+  if (r.status === 401) { delete S.tokens[S.role]; saveTokens(); openLogin(S.role, false); }
   if (!r.ok) throw new Error((j && j.detail) || r.statusText);
   return j;
 }
@@ -177,6 +197,8 @@ async function loadDossier() {
   S.err = null;
   if (!S.pid) { S.data = null; render(); return; }
   try { S.data = await api('/projects/' + S.pid); } catch (e) { S.data = null; S.err = e.message; }
+  S.audit = [];
+  if (S.data && S.role !== 'successor') { try { S.audit = await api(`/projects/${S.pid}/audit`); } catch (e) {} }
   render();
 }
 const allClaims = d => Object.values(d.buckets).flat();
@@ -396,6 +418,7 @@ function render() {
   const redactions = d.role !== 'successor' && d.redactions.length ? `<details class="bg-white border rounded-2xl p-3 text-sm">
       <summary class="cursor-pointer font-medium">🛡️ ${d.redactions.length} secret(s) masked before storage <span class="text-xs text-slate-400 font-normal">(click to see what and where; the secrets themselves are never stored)</span></summary>
       <ul class="mt-2 text-xs text-slate-600 space-y-0.5">${d.redactions.map(r => `<li><b>${esc(r.kind)}</b> in <code>${esc(r.location)}</code></li>`).join('')}</ul></details>` : '';
+  const auditHtml = d.role !== 'successor' ? auditSection() : '';
   const banner = locked ? `<div class="bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm rounded-2xl p-3 flex flex-wrap items-center gap-3">
       <span class="text-xl">✅</span><span class="flex-1">Handover released on ${esc((d.project.locked_at || '').slice(0, 10))}. ${leaver ? 'The dossier is now read-only.' : ''}</span>
       ${leaver ? '<button data-act="asSuccessor" class="btn !text-sm !px-3 !py-1.5 bg-emerald-600 border-emerald-600 text-white">See what the successor sees →</button>' : ''}</div>` : '';
@@ -403,7 +426,7 @@ function render() {
     <div class="mb-4 flex flex-wrap items-end gap-3"><div class="flex-1"><h1 class="text-2xl font-extrabold text-slate-900">${esc(d.project.name)}</h1>
       <p class="text-sm text-slate-500">Handover from <b>${esc(d.project.leaver)}</b> · evidence up to ${esc((d.project.as_of || '').slice(0, 10))}</p></div></div>
     <div class="grid lg:grid-cols-5 gap-4 items-start">
-      <div class="lg:col-span-3 space-y-3">${roleStrip(d)}${banner}${leaver && !locked ? stepper(d) : ''}${legend()}${roadmapHtml}${debriefBox(d, locked)}${leaver && !locked ? releasePanel(d) : ''}${redactions}${sections}</div>
+      <div class="lg:col-span-3 space-y-3">${roleStrip(d)}${banner}${leaver && !locked ? stepper(d) : ''}${legend()}${roadmapHtml}${debriefBox(d, locked)}${leaver && !locked ? releasePanel(d) : ''}${redactions}${auditHtml}${sections}</div>
       <aside class="lg:col-span-2 lg:sticky lg:top-20"><div id="inspector" class="bg-white border rounded-2xl overflow-hidden"></div></aside>
     </div>`;
   renderInspector();
@@ -467,8 +490,11 @@ async function act(el) {
     if (a === 'guide') { S.guide = !S.guide; try { localStorage.setItem('rt_guide', S.guide ? '1' : '0'); } catch (e) {} return render(); }
     if (a === 'go') { const t = document.querySelector(el.dataset.sel); if (t) t.scrollIntoView({behavior: 'smooth', block: 'center'}); else toast('Nothing to do here. This step is already clear.'); return; }
     if (a === 'tour') return startTour();
-    if (a === 'asLeaver') { $('#roleSel').value = S.role = 'leaver'; return loadDossier(); }
-    if (a === 'asSuccessor') { $('#roleSel').value = S.role = 'successor'; S.selSource = null; return loadDossier(); }
+    if (a === 'asLeaver') return switchRole('leaver');
+    if (a === 'asSuccessor') return switchRole('successor');
+    if (a === 'auditToggle') { S.auditOpen = !S.auditOpen; return render(); }
+    if (a === 'auditAll') { S.auditAll = !S.auditAll; return render(); }
+    if (a === 'auditCsv') return exportAudit();
     if (a === 'approve' || a === 'reject' || a === 'reset') await post(`/claims/${id}/action`, {action: a});
     else if (a === 'vis') {
       const c = allClaims(S.data).find(x => x.id == id);
@@ -510,7 +536,10 @@ const TOUR = [
 let tour = {steps: [], i: 0};
 function startTour() {
   if (!S.data) { toast('Load the sample project first, then take the tour.'); return; }
-  if (S.role !== 'leaver') { $('#roleSel').value = S.role = 'leaver'; S.selSource = null; loadDossier().then(startTour); return; }
+  if (S.role !== 'leaver') {
+    if (!S.tokens.leaver) { openLogin('leaver', true); toast('Sign in as the outgoing contributor to run the tour.'); return; }
+    $('#roleSel').value = S.role = 'leaver'; S.selSource = null; loadDossier().then(startTour); return;
+  }
   tour.steps = TOUR.filter(s => document.querySelector(s.sel)); tour.i = 0;
   $('#tourLayer').classList.remove('hidden'); showTour();
 }
@@ -533,10 +562,79 @@ function showTour() {
 }
 function endTour() { $('#tourLayer').classList.add('hidden'); }
 
+
+/* ---------- audit trail ---------- */
+const EV_ICON = {approve: '✅', reject: '❌', reset: '↺', visibility: '👁', edit: '✎', answer_gap: '💬', resolve_conflict: '⚡',
+  mark_unknown: '❓', approve_all: '✅', lock_release: '🚀', debrief_saved: '🎤', project_created: '🆕'};
+const ACTOR = {leaver: 'bg-indigo-100 text-indigo-800', manager: 'bg-sky-100 text-sky-800', system: 'bg-slate-200 text-slate-700', successor: 'bg-emerald-100 text-emerald-800'};
+function auditSection() {
+  const ev = S.audit || [], shown = S.auditAll ? ev : ev.slice(0, 12);
+  const rows = shown.map(e => `<li class="flex gap-2 items-start py-1.5 border-b last:border-0">
+      <span class="w-6 text-center">${EV_ICON[e.action] || '•'}</span>
+      <div class="flex-1 min-w-0"><div class="text-sm">${fmt(e.summary)}</div>
+        ${e.old != null && e.new != null && ['edit', 'visibility', 'answer_gap'].includes(e.action) ? `<div class="text-xs text-slate-500 mt-0.5"><span class="line-through">${esc(e.old)}</span> → <b>${esc(e.new)}</b></div>` : ''}</div>
+      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${ACTOR[e.actor] || ACTOR.system}">${esc(e.actor)}</span>
+      <span class="text-[11px] text-slate-400 w-28 text-right shrink-0">${esc((e.ts || '').replace('T', ' ').replace('Z', ''))}</span></li>`).join('');
+  return `<section id="auditBox" class="bg-white border rounded-2xl p-3">
+    <div class="flex items-center gap-2 cursor-pointer" data-act="auditToggle"><span class="text-xl">📜</span>
+      <div class="flex-1"><div class="font-bold">Audit trail <span class="text-xs text-slate-400 font-normal">${ev.length} event${ev.length === 1 ? '' : 's'}</span></div>
+        <div class="text-xs text-slate-500">An append-only log of every approval, rejection, edit, visibility change and release: who, what, when, and what changed.</div></div>
+      <span class="text-slate-400 text-sm">${S.auditOpen ? '▾' : '▸'}</span></div>
+    ${S.auditOpen ? `<ul class="mt-2">${rows || '<li class="text-sm text-slate-500 py-2">No events yet.</li>'}</ul>
+      <div class="flex gap-3 mt-2 text-xs">${ev.length > 12 ? `<button data-act="auditAll" class="text-indigo-600 underline">${S.auditAll ? 'Show fewer' : 'Show all ' + ev.length}</button>` : ''}
+      <button data-act="auditCsv" class="text-indigo-600 underline tip" data-tip="Download the complete audit trail as a spreadsheet-friendly CSV.">⬇ Export CSV</button></div>` : ''}</section>`;
+}
+function exportAudit() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = ['time,actor,action,summary,old,new', ...(S.audit || []).map(e => [e.ts, e.actor, e.action, e.summary, e.old, e.new].map(q).join(','))].join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'}));
+  a.download = `relaytrace-audit-project-${S.pid}.csv`; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ---------- sign-in ---------- */
+const ROLE_TILE = {leaver: ['🧑‍💻', 'Outgoing contributor', 'Reviews, edits and releases the handover.'],
+  manager: ['🧭', 'Project lead / manager', 'Sees everything plus the audit trail.'],
+  successor: ['🎯', 'Successor', 'Receives only what was approved and shared.']};
+let loginPref = 'leaver';
+function openLogin(pref, dismissable) {
+  loginPref = pref || 'leaver';
+  $('#loginTiles').innerHTML = Object.entries(ROLE_TILE).map(([r, [i, t, d]]) => `<form data-login="${r}" class="bg-white border rounded-2xl p-4 ${r === loginPref ? 'ring-2 ring-indigo-400' : ''}">
+      <div class="text-3xl">${i}</div><div class="font-bold mt-1">${t}</div><p class="text-xs text-slate-500 min-h-[32px]">${d}</p>
+      <input type="password" inputmode="numeric" autocomplete="off" placeholder="PIN" class="mt-2 w-full border rounded-lg px-2 py-1.5 text-sm tracking-widest" ${r === loginPref ? 'autofocus' : ''}>
+      <button type="button" data-fill="${r}" class="text-[11px] text-indigo-600 underline mt-1">use demo PIN (${PIN_HINT[r]})</button>
+      <button class="mt-2 w-full btn justify-center bg-indigo-600 border-indigo-600 text-white !py-1.5 !text-sm">${S.tokens[r] ? 'Switch to this role' : 'Sign in'}</button></form>`).join('');
+  $('#loginErr').textContent = '';
+  $('#loginClose').classList.toggle('hidden', !dismissable);
+  $('#login').style.display = 'flex';
+  setTimeout(() => { const i = document.querySelector(`[data-login="${loginPref}"] input`); if (i) i.focus(); }, 60);
+}
+async function doLogin(role, pin) {
+  const r = await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role, pin})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { $('#loginErr').textContent = j.detail || 'Sign-in failed'; return; }
+  S.tokens[role] = j.token; saveTokens(); S.role = role; $('#roleSel').value = role;
+  S.selSource = null; S.selClaim = null; $('#login').style.display = 'none';
+  await loadProjects(); await loadDossier();
+}
+function switchRole(role) {
+  if (!S.tokens[role]) { $('#roleSel').value = S.role; openLogin(role, true); return; }
+  S.role = role; $('#roleSel').value = role; S.selSource = null; S.selClaim = null; return loadDossier();
+}
+document.addEventListener('submit', e => {
+  const f = e.target.closest('[data-login]'); if (!f) return;
+  e.preventDefault(); doLogin(f.dataset.login, f.querySelector('input').value);
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-fill]'); if (!b) return;
+  const f = b.closest('form'); f.querySelector('input').value = PIN_HINT[b.dataset.fill]; f.querySelector('input').focus();
+});
+
 /* ---------- wiring ---------- */
 document.addEventListener('click', e => { const el = e.target.closest('[data-act]'); if (el) { if (el.dataset.act === 'toggle' && e.target.closest('button:not([data-act="toggle"])')) { const inner = e.target.closest('button'); if (inner.dataset.act === 'bulk') return act(inner); } act(el); } });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { endTour(); $('#dlg').style.display = 'none'; $('#modal').style.display = 'none'; } });
-$('#roleSel').onchange = e => { S.role = e.target.value; S.selSource = null; S.selClaim = null; loadDossier(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { endTour(); $('#dlg').style.display = 'none'; $('#modal').style.display = 'none'; if (!$('#loginClose').classList.contains('hidden')) $('#login').style.display = 'none'; } });
+$('#roleSel').onchange = e => switchRole(e.target.value);
+$('#btnOut').onclick = () => { S.tokens = {}; saveTokens(); S.data = null; $('#app').innerHTML = ''; openLogin('leaver', false); };
+$('#loginClose').onclick = () => { $('#login').style.display = 'none'; $('#roleSel').value = S.role; };
 $('#projSel').onchange = e => { S.pid = e.target.value; S.selSource = null; loadDossier(); };
 $('#btnDemo').onclick = createDemo;
 $('#btnUpload').onclick = () => { $('#modal').style.display = 'flex'; };
@@ -548,7 +646,12 @@ $('#upForm').onsubmit = async e => {
   try { const r = await api('/ingest', {method: 'POST', body: fd}); $('#modal').style.display = 'none'; S.selSource = null; await loadProjects(r.id); await loadDossier(); toast('Dossier built'); }
   catch (err) { toast(err.message, true); }
 };
-(async () => { await loadProjects(); await loadDossier(); })();
+(async () => {
+  const have = ['leaver', 'manager', 'successor'].find(r => S.tokens[r]);
+  if (!have) { openLogin('leaver', false); return; }
+  S.role = have; $('#roleSel').value = have;
+  await loadProjects(); await loadDossier();
+})();
 </script>
 </body>
 </html>

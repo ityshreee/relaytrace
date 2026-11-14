@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS claims(
 CREATE TABLE IF NOT EXISTS debrief(
   id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, idx INTEGER, question TEXT,
   bucket TEXT, answer TEXT);
+CREATE TABLE IF NOT EXISTS events(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, ts TEXT, actor TEXT, action TEXT,
+  claim_id INTEGER, summary TEXT, old TEXT, new TEXT);
 CREATE TABLE IF NOT EXISTS redactions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, kind TEXT, location TEXT);
 """

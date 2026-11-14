@@ -6,16 +6,16 @@ os.environ["RELAYTRACE_DB"] = os.path.join(tempfile.mkdtemp(), "test.db")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.demo_data import FAKE_AWS, FAKE_PW, FAKE_STRIPE  # noqa: E402
-from app.main import app  # noqa: E402
+from app.main import PINS, app, make_token  # noqa: E402
 
 
 def H(role):
-    return {"X-Role": role}
+    return {"X-Token": make_token(role)}
 
 
 def test_full_workflow():
     with TestClient(app) as cl:
-        pid = cl.post("/api/demo").json()["id"]
+        pid = cl.post("/api/demo", headers=H("leaver")).json()["id"]
         d = cl.get(f"/api/projects/{pid}", headers=H("leaver")).json()
         b = d["buckets"]
 
@@ -76,15 +76,25 @@ def test_full_workflow():
         sid = next(c["source"]["id"] for c in flat if c["source"])
         assert cl.get(f"/api/sources/{sid}", headers=H("successor")).status_code == 200
 
+        # audit trail: every decision is recorded, readable by leaver/manager, hidden from the successor
+        ev = cl.get(f"/api/projects/{pid}/audit", headers=H("manager")).json()
+        actions = [e["action"] for e in ev]
+        for a in ("project_created", "resolve_conflict", "debrief_saved", "answer_gap", "approve_all", "visibility", "lock_release"):
+            assert a in actions, a
+        vis = next(e for e in ev if e["action"] == "visibility")
+        assert (vis["old"], vis["new"]) == ("all", "manager") and vis["actor"] == "leaver"
+        assert ev[0]["action"] == "lock_release"  # newest first
+        assert cl.get(f"/api/projects/{pid}/audit", headers=H("successor")).status_code == 403
+
 
 def test_bad_uploads():
     with TestClient(app) as cl:
-        assert cl.post("/api/ingest", data={"name": "x"}).status_code == 400
-        r = cl.post("/api/ingest", data={"name": "x"}, files={"github": ("g.json", b"not json")})
+        assert cl.post("/api/ingest", data={"name": "x"}, headers=H("leaver")).status_code == 400
+        r = cl.post("/api/ingest", data={"name": "x"}, files={"github": ("g.json", b"not json")}, headers=H("leaver"))
         assert r.status_code == 400
-        r = cl.post("/api/ingest", data={"name": "x"}, files={"slack": ("s.json", b"")})
+        r = cl.post("/api/ingest", data={"name": "x"}, files={"slack": ("s.json", b"")}, headers=H("leaver"))
         assert r.status_code == 400
-        r = cl.post("/api/ingest", data={"name": "x"}, files={"jira": ("j.csv", b"a,b\n1,2\n")})
+        r = cl.post("/api/ingest", data={"name": "x"}, files={"jira": ("j.csv", b"a,b\n1,2\n")}, headers=H("leaver"))
         assert r.status_code == 400
 
 
@@ -93,7 +103,19 @@ def test_sample_files_roundtrip():
         files = {}
         for n in ("github.json", "slack.json", "jira.csv"):
             files[n.split(".")[0]] = (n, cl.get(f"/api/demo-files/{n}").content)
-        r = cl.post("/api/ingest", data={"name": "uploaded", "leaver": "arjun"}, files=files)
+        r = cl.post("/api/ingest", data={"name": "uploaded", "leaver": "arjun"}, files=files, headers=H("leaver"))
         assert r.status_code == 200
         d = cl.get(f"/api/projects/{r.json()['id']}", headers=H("leaver")).json()
         assert d["stats"]["total"] > 10
+
+
+def test_sign_in():
+    with TestClient(app) as cl:
+        assert cl.get("/api/projects").status_code == 401
+        assert cl.get("/api/projects", headers={"X-Token": "leaver.forged"}).status_code == 401
+        assert cl.post("/api/login", json={"role": "leaver", "pin": "0000"}).status_code == 401
+        r = cl.post("/api/login", json={"role": "leaver", "pin": PINS["leaver"]})
+        assert r.status_code == 200
+        assert cl.get("/api/projects", headers={"X-Token": r.json()["token"]}).status_code == 200
+        # a successor token cannot create projects
+        assert cl.post("/api/demo", headers=H("successor")).status_code == 403
