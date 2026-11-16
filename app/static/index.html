@@ -4,71 +4,230 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RelayTrace — evidence-linked handover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>try{if(localStorage.getItem('rt_theme')!=='light')document.documentElement.classList.add('dark')}catch(e){document.documentElement.classList.add('dark')}</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  mark{background:#fde68a;padding:0 2px;border-radius:3px}
+  :root{--bg:#f5f6fb;--fg:#0f172a;--muted:#64748b;--card:rgba(255,255,255,.74);--line:rgba(15,23,42,.09);--glow:rgba(99,102,241,.16);
+    --grid:rgba(15,23,42,.045);--solid:#ffffff;--hdr:rgba(255,255,255,.72);--accent:#6366f1}
+  html.dark{--bg:#07070d;--fg:#eceef8;--muted:#9aa1bb;--card:rgba(255,255,255,.045);--line:rgba(255,255,255,.10);--glow:rgba(129,140,248,.20);
+    --grid:rgba(255,255,255,.045);--solid:#11121c;--hdr:rgba(9,9,16,.66);color-scheme:dark}
+  html{scroll-behavior:smooth}
+  body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,#000 25%,transparent 75%);mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,#000 25%,transparent 75%)}
+  #bg{position:fixed;inset:0;width:100%;height:100%;z-index:-2;pointer-events:none;filter:blur(30px) saturate(1.2)}
+  h1,h2,h3{letter-spacing:-.018em}
+  code,pre.mono,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+  mark{background:#fde68a;color:#451a03;padding:0 3px;border-radius:4px}
   pre{white-space:pre-wrap;word-break:break-word}
-  code{background:#eef2ff;color:#4338ca;padding:0 4px;border-radius:4px;font-size:.85em}
-  .card{transition:box-shadow .15s,transform .15s}
-  .card:hover{box-shadow:0 4px 14px rgba(79,70,229,.10)}
-  .card.sel{box-shadow:0 0 0 2px #6366f1}
+  code{background:rgba(99,102,241,.12);color:#4338ca;padding:1px 5px;border-radius:5px;font-size:.84em}
+  ::selection{background:rgba(129,140,248,.4)}
+  ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:rgba(120,126,160,.35);border-radius:9px;border:2px solid transparent;background-clip:content-box}
+  :focus-visible{outline:2px solid #818cf8;outline-offset:2px;border-radius:8px}
+  #hdr button,#hdr select,#hdr label{white-space:nowrap}
+  #projSel{max-width:170px;text-overflow:ellipsis}
+  #hdr{background:var(--hdr);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border-bottom:1px solid var(--line)}
+
+  /* glass surfaces + cursor-tracking glow */
+  html:not(.dark) .bg-white{background-color:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  html:not(.dark) .card,html:not(.dark) section.bg-white{box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -12px rgba(15,23,42,.10)}
+  .card,#app section.bg-white{position:relative;border-color:var(--line);transition:border-color .2s,box-shadow .2s,transform .2s}
+  .card:hover,#app section.bg-white:hover{background-image:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),var(--glow),transparent 62%);border-color:rgba(129,140,248,.45)}
+  .card.sel{box-shadow:0 0 0 2px #818cf8,0 0 30px -4px rgba(129,140,248,.55)}
   .tip{position:relative}
-  .tip:hover::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);
-    background:#0f172a;color:#fff;font-size:11px;line-height:1.35;padding:6px 8px;border-radius:6px;width:max-content;max-width:230px;
-    white-space:normal;text-align:left;z-index:60;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:none;font-weight:400}
+  .tip:hover::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);background:#12131f;color:#eceef8;border:1px solid rgba(255,255,255,.12);
+    font-size:11px;line-height:1.4;padding:7px 9px;border-radius:8px;width:max-content;max-width:240px;white-space:normal;text-align:left;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.35);pointer-events:none;font-weight:400}
   .tip-r:hover::after{left:auto;right:0;transform:none}
-  .hero-bg{background:radial-gradient(1200px 400px at 10% -20%,#c7d2fe 0,transparent 60%),radial-gradient(900px 400px at 100% 0,#fbcfe8 0,transparent 55%),#f8fafc}
-  .btn{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;font-size:12px;border-radius:8px;border:1px solid;font-weight:500;transition:all .12s}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;font-size:12px;border-radius:9px;border:1px solid;font-weight:500;transition:transform .15s,box-shadow .15s,background .15s}
   .btn:hover{transform:translateY(-1px)}
+  button.bg-indigo-600,button.bg-indigo-500{background-image:linear-gradient(135deg,#6366f1,#8b5cf6)!important;border-color:transparent!important;box-shadow:0 8px 20px -8px rgba(99,102,241,.8)}
+  button.bg-emerald-600,button.bg-emerald-500{background-image:linear-gradient(135deg,#10b981,#14b8a6)!important;border-color:transparent!important;box-shadow:0 8px 20px -8px rgba(16,185,129,.7)}
+  button.bg-rose-600{background-image:linear-gradient(135deg,#f43f5e,#ec4899)!important;border-color:transparent!important;box-shadow:0 8px 20px -8px rgba(244,63,94,.7)}
+  button.bg-indigo-600:hover,button.bg-emerald-600:hover,button.bg-rose-600:hover,button.bg-emerald-500:hover{filter:brightness(1.08)}
+  .btn-tour{background-image:linear-gradient(135deg,#d946ef,#6366f1);color:#fff;box-shadow:0 8px 22px -8px rgba(217,70,239,.8)}
+  select,input[type=text],input[type=password],textarea{background-color:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:#818cf8;box-shadow:0 0 0 3px rgba(129,140,248,.25)}
+  textarea::placeholder,input::placeholder{color:var(--muted);opacity:.7}
+  .hero-bg{background:radial-gradient(900px 420px at 12% -10%,rgba(129,140,248,.30),transparent 60%),radial-gradient(800px 420px at 100% 0,rgba(244,114,182,.22),transparent 55%),var(--bg)}
   .step-done{background:#10b981;color:#fff;border-color:#10b981}
-  .step-now{background:#4f46e5;color:#fff;border-color:#4f46e5;box-shadow:0 0 0 4px rgba(99,102,241,.25)}
-  .step-todo{background:#fff;color:#94a3b8;border-color:#cbd5e1}
+  .step-now{background:#6366f1;color:#fff;border-color:#6366f1;box-shadow:0 0 0 4px rgba(99,102,241,.28),0 0 18px rgba(99,102,241,.6)}
+  .step-todo{background:var(--card);color:var(--muted);border-color:var(--line)}
+  .grad{background:linear-gradient(92deg,#818cf8 0%,#e879f9 55%,#fb923c 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
   @keyframes fall{0%{transform:translateY(-10vh) rotate(0);opacity:1}100%{transform:translateY(110vh) rotate(540deg);opacity:.8}}
   .confetti{position:fixed;top:0;z-index:70;font-size:24px;animation:fall 3.2s linear forwards;pointer-events:none}
   @keyframes pop{0%{transform:scale(.96);opacity:0}100%{transform:scale(1);opacity:1}}
   .pop{animation:pop .18s ease-out}
-  #spot{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(15,23,42,.68);transition:all .3s;pointer-events:none;z-index:80}
-  #tourCard{position:fixed;z-index:81;width:min(340px,92vw)}
+  @keyframes rise{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:none}}
+  #app.enter{animation:rise .45s cubic-bezier(.2,.7,.2,1) both}
+  .dot{position:absolute;transform:translate(-50%,-50%);border-radius:9999px;cursor:pointer;border:0;padding:0;transition:transform .12s}
+  .dot:hover{transform:translate(-50%,-50%) scale(1.35);z-index:20}
+  .dot:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#fff;color:#0f172a;font-size:11px;line-height:1.35;
+    padding:6px 8px;border-radius:6px;width:max-content;max-width:250px;white-space:normal;text-align:left;z-index:60;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none;font-weight:400}
+  #spot{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(5,6,12,.72),0 0 0 2px rgba(129,140,248,.9),0 0 32px rgba(129,140,248,.6);transition:all .35s cubic-bezier(.2,.7,.2,1);pointer-events:none;z-index:80}
+  #tourCard{position:fixed;z-index:81;width:min(360px,92vw)}
+  #dlg>div,#fb>div,#modal>form,#tourCard{background:var(--solid)!important;border:1px solid var(--line);backdrop-filter:none!important}
+
+  /* landing */
+  .l-wrap{max-width:1180px;margin:0 auto;padding:0 18px}
+  .l-hero h1{font-size:clamp(36px,5.6vw,68px);line-height:1.03;font-weight:800;letter-spacing:-.035em}
+  .l-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 13px;font-size:12px;color:var(--muted);backdrop-filter:blur(10px)}
+  .l-cta{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:12px;font-weight:600;font-size:15px;color:#fff;background-image:linear-gradient(135deg,#6366f1,#a855f7 60%,#ec4899);box-shadow:0 14px 34px -12px rgba(124,58,237,.8);transition:transform .15s,box-shadow .15s}
+  .l-cta:hover{transform:translateY(-2px);box-shadow:0 20px 40px -12px rgba(124,58,237,.9)}
+  .l-ghost{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:12px;font-weight:600;font-size:15px;border:1px solid var(--line);background:var(--card);backdrop-filter:blur(10px);transition:transform .15s,border-color .15s}
+  .l-ghost:hover{transform:translateY(-2px);border-color:rgba(129,140,248,.6)}
+  .l-card{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;backdrop-filter:blur(12px);transition:transform .2s,border-color .2s}
+  .l-card::before{content:"";position:absolute;inset:0;background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%),var(--glow),transparent 45%);opacity:0;transition:opacity .25s;pointer-events:none}
+  .l-card:hover{border-color:rgba(129,140,248,.55)}.l-card:hover::before{opacity:1}
+  .l-card h3{font-weight:700;margin:8px 0 4px}.l-card p{font-size:13.5px;color:var(--muted);line-height:1.5}
+  .l-ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:19px;background:linear-gradient(135deg,rgba(99,102,241,.25),rgba(217,70,239,.2));border:1px solid var(--line)}
+  .l-new{font-size:10px;font-weight:800;letter-spacing:.06em;padding:2px 7px;border-radius:99px;color:#fff;background:linear-gradient(135deg,#d946ef,#6366f1)}
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}.reveal.in{opacity:1;transform:none}
+  [data-tilt]{transform-style:preserve-3d;transition:transform .18s ease-out;will-change:transform}
+  .l-h2{font-size:clamp(26px,3.4vw,40px);font-weight:800;letter-spacing:-.03em;line-height:1.1}
+  .l-sub{color:var(--muted);max-width:640px}
+  .l-tab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid transparent;transition:all .15s;cursor:pointer}
+  .l-tab:hover{background:var(--card)}.l-tab.on{background:var(--card);border-color:rgba(129,140,248,.55);box-shadow:0 0 24px -8px rgba(129,140,248,.7)}
+  .l-num{width:26px;height:26px;border-radius:99px;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--card);border:1px solid var(--line);flex:none}
+  .l-tab.on .l-num{background:linear-gradient(135deg,#6366f1,#d946ef);color:#fff;border-color:transparent}
+  .l-code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12.5px;line-height:1.6;background:#0a0b13;color:#d9dcf0;border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:16px;overflow:auto;white-space:pre}
+  .l-code .cm{color:#7a819e}.l-code .kw{color:#c4b5fd}.l-code .st{color:#86efac}.l-code .hl{background:rgba(129,140,248,.22);border-radius:4px;padding:0 2px}
+  .badge-t{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:13px;font-weight:600;transition:transform .15s,border-color .15s}
+  .badge-t:hover{transform:translateY(-2px);border-color:rgba(129,140,248,.6)}
+  /* hero mock */
+  .mock{background:var(--solid);border:1px solid var(--line);border-radius:18px;box-shadow:0 40px 80px -30px rgba(79,70,229,.55),0 0 0 1px rgba(255,255,255,.03) inset;overflow:visible}
+  .mock-bar{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted)}
+  .mock-bar i{width:9px;height:9px;border-radius:99px;background:#f87171}.mock-bar i:nth-child(2){background:#fbbf24}.mock-bar i:nth-child(3){background:#34d399}.mock-bar span{margin-left:8px}
+  .mock-body{padding:14px;display:grid;gap:10px}
+  .mb{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;white-space:nowrap}
+  .mb-src{background:rgba(16,185,129,.18);color:#059669}.mb-conf{background:rgba(245,158,11,.2);color:#b45309}.mb-gap{background:rgba(244,63,94,.18);color:#e11d48}.mb-inf{background:rgba(139,92,246,.2);color:#7c3aed}
+  html.dark .mb-src{color:#6ee7b7}html.dark .mb-conf{color:#fcd34d}html.dark .mb-gap{color:#fda4af}html.dark .mb-inf{color:#c4b5fd}
+  .mrow{display:flex;align-items:center;gap:8px;font-size:13px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+  .mpill{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:99px;background:rgba(99,102,241,.16);color:#6366f1;white-space:nowrap}
+  html.dark .mpill{color:#a5b4fc}
+  .float-chip{position:absolute;padding:7px 12px;border-radius:12px;font-size:12px;font-weight:600;background:var(--solid);border:1px solid var(--line);box-shadow:0 18px 40px -14px rgba(0,0,0,.45);transform:translateZ(60px)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}}
+
+  /* ===== dark-mode overrides for the Tailwind utility classes used by the app ===== */
+  html.dark *{border-color:rgba(255,255,255,.10)}
+  html.dark circle[stroke="#e2e8f0"]{stroke:rgba(255,255,255,.12)}
+  #hdr .max-w-\[1500px\]{flex-wrap:nowrap}
+  @media (max-width:1100px){#hdr .max-w-\[1500px\]{flex-wrap:wrap}}
+  html.dark .bg-white{background-color:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  html.dark code{background:rgba(129,140,248,.16);color:#c7d2fe}
+  html.dark select option{background:#11121c;color:#eceef8}
+  html.dark .tip:hover::after{background:#1b1d2e}
+/* generated dark overrides */
+  html.dark .bg-amber-100{background-color:rgba(245,158,11,0.16)}
+  html.dark .bg-amber-50{background-color:rgba(245,158,11,0.13)}
+  html.dark .bg-emerald-100{background-color:rgba(16,185,129,0.16)}
+  html.dark .bg-emerald-50{background-color:rgba(16,185,129,0.13)}
+  html.dark .bg-fuchsia-50{background-color:rgba(217,70,239,0.13)}
+  html.dark .bg-indigo-100{background-color:rgba(99,102,241,0.16)}
+  html.dark .bg-indigo-50{background-color:rgba(99,102,241,0.13)}
+  html.dark .bg-orange-100{background-color:rgba(249,115,22,0.16)}
+  html.dark .bg-rose-100{background-color:rgba(244,63,94,0.16)}
+  html.dark .bg-rose-50{background-color:rgba(244,63,94,0.13)}
+  html.dark .bg-sky-100{background-color:rgba(14,165,233,0.16)}
+  html.dark .bg-sky-50{background-color:rgba(14,165,233,0.13)}
+  html.dark .bg-slate-100{background-color:rgba(255,255,255,0.06)}
+  html.dark .bg-slate-200{background-color:rgba(255,255,255,0.09)}
+  html.dark .bg-slate-50{background-color:rgba(255,255,255,0.035)}
+  html.dark .bg-violet-100{background-color:rgba(139,92,246,0.16)}
+  html.dark .border-amber-200{border-color:rgba(245,158,11,0.32)}
+  html.dark .border-amber-300{border-color:rgba(245,158,11,0.4)}
+  html.dark .border-emerald-200{border-color:rgba(16,185,129,0.32)}
+  html.dark .border-emerald-300{border-color:rgba(16,185,129,0.4)}
+  html.dark .border-fuchsia-300{border-color:rgba(217,70,239,0.4)}
+  html.dark .border-indigo-200{border-color:rgba(99,102,241,0.32)}
+  html.dark .border-indigo-300{border-color:rgba(99,102,241,0.4)}
+  html.dark .border-indigo-400{border-color:rgba(99,102,241,0.45)}
+  html.dark .border-rose-200{border-color:rgba(244,63,94,0.32)}
+  html.dark .border-rose-300{border-color:rgba(244,63,94,0.4)}
+  html.dark .border-sky-200{border-color:rgba(14,165,233,0.32)}
+  html.dark .border-slate-200{border-color:rgba(255,255,255,0.1)}
+  html.dark .border-slate-300{border-color:rgba(255,255,255,0.14)}
+  html.dark .from-amber-50{--tw-gradient-from:rgba(245,158,11,.16);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to,rgba(245,158,11,0))}
+  html.dark .from-indigo-50{--tw-gradient-from:rgba(99,102,241,.16);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to,rgba(99,102,241,0))}
+  html.dark .hover\:bg-emerald-50:hover{background-color:rgba(16,185,129,0.21000000000000002)}
+  html.dark .hover\:bg-fuchsia-50:hover{background-color:rgba(217,70,239,0.21000000000000002)}
+  html.dark .hover\:bg-indigo-100:hover{background-color:rgba(99,102,241,0.24)}
+  html.dark .hover\:bg-indigo-50:hover{background-color:rgba(99,102,241,0.21000000000000002)}
+  html.dark .hover\:bg-rose-50:hover{background-color:rgba(244,63,94,0.21000000000000002)}
+  html.dark .hover\:bg-slate-100:hover{background-color:rgba(255,255,255,0.1)}
+  html.dark .hover\:bg-slate-50:hover{background-color:rgba(255,255,255,0.07500000000000001)}
+  html.dark .hover\:text-slate-800:hover{color:#eceef8}
+  html.dark .text-amber-700{color:#fcd34d}
+  html.dark .text-amber-800{color:#fcd34d}
+  html.dark .text-amber-900{color:#fcd34d}
+  html.dark .text-emerald-700{color:#6ee7b7}
+  html.dark .text-emerald-800{color:#6ee7b7}
+  html.dark .text-emerald-900{color:#6ee7b7}
+  html.dark .text-fuchsia-700{color:#f0abfc}
+  html.dark .text-indigo-600{color:#a5b4fc}
+  html.dark .text-indigo-700{color:#a5b4fc}
+  html.dark .text-indigo-800{color:#a5b4fc}
+  html.dark .text-indigo-900{color:#a5b4fc}
+  html.dark .text-orange-800{color:#fdba74}
+  html.dark .text-rose-600{color:#fda4af}
+  html.dark .text-rose-700{color:#fda4af}
+  html.dark .text-rose-800{color:#fda4af}
+  html.dark .text-sky-700{color:#7dd3fc}
+  html.dark .text-sky-800{color:#7dd3fc}
+  html.dark .text-slate-300{color:#565c78}
+  html.dark .text-slate-400{color:#6f7794}
+  html.dark .text-slate-500{color:#8f97b3}
+  html.dark .text-slate-600{color:#aab1cb}
+  html.dark .text-slate-700{color:#cdd2e8}
+  html.dark .text-slate-800{color:#eceef8}
+  html.dark .text-slate-900{color:#eceef8}
+  html.dark .text-violet-800{color:#c4b5fd}
+  html.dark .to-white{--tw-gradient-to:rgba(255,255,255,.03)}
+  html.dark #btnUpload,html.dark #btnDemo,html.dark #btnOut,html.dark #btnTheme{background-color:rgba(255,255,255,.05)}
+  html.dark .btn.border-slate-300{color:#cdd2e8}
 </style>
 </head>
-<body class="bg-slate-50 text-slate-800">
+<body>
+<canvas id="bg"></canvas>
 
-<header class="bg-white/90 backdrop-blur border-b sticky top-0 z-40">
+<header id="hdr" class="sticky top-0 z-40">
   <div class="max-w-[1500px] mx-auto px-4 py-2 flex flex-wrap items-center gap-3">
-    <div class="flex items-center gap-2">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-fuchsia-500 text-white font-black grid place-items-center">R</div>
-      <div><div class="font-extrabold text-slate-900 leading-none">RelayTrace</div>
-      <div class="text-[11px] text-slate-500 hidden md:block leading-tight">every handover claim comes with a receipt</div></div>
-    </div>
+    <button data-act="home" class="flex items-center gap-2 text-left tip" data-tip="Back to the overview page">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-fuchsia-500 text-white font-black grid place-items-center shadow-lg">R</div>
+      <div><div class="font-extrabold leading-none">RelayTrace</div><div class="text-[11px] hidden md:block leading-tight" style="color:var(--muted)">every handover claim comes with a receipt</div></div></button>
     <div class="flex-1"></div>
-    <label class="text-xs text-slate-500 tip" data-tip="Each project is one handover. Pick one or create a new demo.">Project
-      <select id="projSel" class="ml-1 border rounded-lg px-2 py-1 text-sm bg-white"></select></label>
-    <label id="roleBox" class="text-xs text-slate-500 tip" data-tip="Same data, three different views. Try each one: the server enforces what every role can see.">Viewing as
-      <select id="roleSel" class="ml-1 border rounded-lg px-2 py-1 text-sm bg-white font-medium">
-        <option value="leaver">🧑‍💻 Outgoing contributor</option>
-        <option value="manager">🧭 Project lead / manager</option>
-        <option value="successor">🎯 Successor</option>
-      </select></label>
-    <button data-act="tour" class="text-sm font-semibold rounded-lg px-3 py-1.5 bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-white hover:opacity-90 tip" data-tip="A 60-second guided walkthrough that points at each part of the screen.">▶ Take the tour</button>
-    <button id="btnDemo" class="text-sm border rounded-lg px-3 py-1.5 hover:bg-slate-100 tip" data-tip="Creates a fresh copy of the PayFlow-Core sample project so you can try the full flow again.">New demo project</button>
-    <button id="btnOut" class="text-sm border rounded-lg px-3 py-1.5 hover:bg-slate-100 tip" data-tip="Forget all role sign-ins on this browser tab.">Sign out</button>
-    <button id="btnUpload" class="text-sm bg-slate-900 text-white rounded-lg px-3 py-1.5 hover:bg-slate-700 tip tip-r" data-tip="Bring your own GitHub JSON, Slack JSON and Jira/Linear CSV. Secrets are masked before storage.">⬆ Upload exports</button>
+    <div id="hdrApp" class="flex flex-wrap items-center gap-3">
+      <label class="text-xs tip" style="color:var(--muted)" data-tip="Each project is one handover. Pick one or create a new demo.">Project
+        <select id="projSel" class="ml-1 border rounded-lg px-2 py-1 text-sm"></select></label>
+      <label id="roleBox" class="text-xs tip" style="color:var(--muted)" data-tip="Same data, four different views. The server enforces what each role can see.">Viewing as
+        <select id="roleSel" class="ml-1 border rounded-lg px-2 py-1 text-sm font-medium">
+          <option value="leaver">🧑‍💻 Outgoing contributor</option><option value="manager">🧭 Manager</option>
+          <option value="successor">🎯 Successor</option><option value="contractor">🧰 Contractor</option></select></label>
+      <button id="btnDemo" class="text-sm border rounded-lg px-3 py-1.5 hover:bg-slate-100 tip" data-tip="Creates a fresh copy of the PayFlow-Core sample project.">＋ Demo</button>
+      <button id="btnUpload" class="text-sm border rounded-lg px-3 py-1.5 hover:bg-slate-100 tip" data-tip="Bring your own GitHub JSON, Slack JSON and Jira/Linear CSV. Secrets are masked before storage.">⬆ Upload</button>
+      <button id="btnOut" class="text-sm border rounded-lg px-3 py-1.5 hover:bg-slate-100 tip" data-tip="Forget all role sign-ins on this browser tab.">Sign out</button>
+    </div>
+    <button data-act="tour" class="btn-tour text-sm font-semibold rounded-lg px-3 py-1.5 hover:opacity-90 tip" data-tip="A guided walkthrough that points at each part of the screen, tailored to the role you are viewing.">▶ Take the tour</button>
+    <button id="btnTheme" class="text-sm border rounded-lg px-2.5 py-1.5 tip tip-r" data-tip="Switch between dark and light theme">☀️</button>
   </div>
 </header>
 
 <div id="toast" class="fixed top-16 right-4 z-[90] hidden px-4 py-2 rounded-lg shadow-lg text-sm"></div>
+<div id="landing" style="display:none"></div>
 <main class="max-w-[1500px] mx-auto px-4 py-4"><div id="app"></div></main>
 
 <!-- sign-in -->
 <div id="login" class="fixed inset-0 z-[95] hidden items-center justify-center p-4 hero-bg overflow-auto">
-  <div class="w-full max-w-3xl pop">
+  <div class="w-full max-w-5xl pop">
     <div class="text-center mb-5">
       <div class="inline-grid w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-fuchsia-500 text-white font-black text-xl place-items-center">R</div>
       <h1 class="text-3xl font-extrabold text-slate-900 mt-2">Sign in to RelayTrace</h1>
       <p class="text-sm text-slate-600">Pick who you are. The server checks your PIN and then enforces what you can see and do.</p>
     </div>
-    <div id="loginTiles" class="grid md:grid-cols-3 gap-3"></div>
+    <div id="loginTiles" class="grid sm:grid-cols-2 md:grid-cols-4 gap-3"></div>
     <p id="loginErr" class="text-center text-sm text-rose-600 mt-3 h-5"></p>
     <p class="text-center text-xs text-slate-500">Demo build: PINs are shown so judges can try every role. Real deployments set them with environment variables.</p>
     <div class="text-center mt-2"><button id="loginClose" class="text-xs text-slate-500 underline hidden">Cancel</button></div>
@@ -85,6 +244,18 @@
       <button id="dlgNo" class="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
       <button id="dlgYes" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">OK</button>
     </div>
+  </div>
+</div>
+
+<!-- feedback modal -->
+<div id="fb" class="fixed inset-0 bg-black/45 z-[85] hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-lg pop">
+    <h2 class="font-bold text-lg">🚩 Tell the leaver what is off</h2>
+    <p id="fbClaim" class="text-xs text-slate-500 mt-1 italic"></p>
+    <div id="fbKinds" class="grid grid-cols-3 gap-2 mt-3"></div>
+    <textarea id="fbNote" rows="4" placeholder="What did you expect instead? Be specific." class="mt-3 w-full border rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
+    <div class="flex justify-end gap-2 mt-4"><button id="fbNo" class="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
+      <button id="fbYes" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Send feedback</button></div>
   </div>
 </div>
 
@@ -114,8 +285,9 @@
 <div id="tourLayer" class="hidden"><div id="spot"></div><div id="tourCard" class="bg-white rounded-2xl shadow-2xl p-4 pop"></div></div>
 
 <script>
-const PIN_HINT = {leaver: '2468', manager: '1357', successor: '9753'};
-const S = {tokens: {}, audit: [], auditOpen: false, auditAll: false, role: 'leaver', pid: null, data: null, selSource: null, selClaim: null, err: null,
+const PIN_HINT = {leaver: '2468', manager: '1357', successor: '9753', contractor: '8642'};
+const RES = r => r !== 'leaver' && r !== 'manager';
+const S = {tokens: {}, radar: null, scope: null, feedback: [], receipt: null, audit: [], auditOpen: false, auditAll: false, role: 'leaver', pid: null, data: null, selSource: null, selClaim: null, err: null,
            open: {decisions: true, unfinished: true, risks: false, contacts: false, gaps: true}, guide: true};
 try { if (localStorage.getItem('rt_guide') === '0') S.guide = false; } catch (e) {}
 try { S.tokens = JSON.parse(sessionStorage.getItem('rt_tokens') || '{}'); } catch (e) {}
@@ -145,7 +317,8 @@ const TRUST_HELP = {
 const ROLE_INFO = {
   leaver: ['🧑‍💻', 'You are the outgoing contributor.', 'You answer the debrief, settle conflicts, approve or reject every claim, choose what the successor can see, then lock and release.'],
   manager: ['🧭', 'You are the project lead.', 'Read-only oversight. You see every claim, including rejected and manager-only ones, plus the secret-redaction report.'],
-  successor: ['🎯', 'You are the successor.', 'You only see claims the leaver approved and shared, after the handover is released. Every claim still links to its original evidence.']
+  successor: ['🎯', 'You are the successor.', 'You only see claims the leaver approved and shared, after the handover is released. Flag anything wrong or unclear, then acknowledge receipt.'],
+  contractor: ['🧰', 'You are a contractor.', 'A narrower view than the successor: only approved, shared claims for the components you were granted. No debrief, no audit trail.']
 };
 const ATTR_GROUPS = [['unmerged branch', 'Branches never merged'], ['open PR', 'Open pull requests'], ['open ticket', 'Tickets still assigned to the leaver'], ['blocker', 'Blockers & caveats']];
 
@@ -197,8 +370,13 @@ async function loadDossier() {
   S.err = null;
   if (!S.pid) { S.data = null; render(); return; }
   try { S.data = await api('/projects/' + S.pid); } catch (e) { S.data = null; S.err = e.message; }
-  S.audit = [];
-  if (S.data && S.role !== 'successor') { try { S.audit = await api(`/projects/${S.pid}/audit`); } catch (e) {} }
+  S.audit = []; S.radar = null; S.scope = null; S.feedback = []; S.receipt = null;
+  if (S.data) {
+    const full = !RES(S.role), locked = S.data.project.status === 'locked', g = p => api(p).catch(() => null);
+    const [a, r, sc, f, rc] = await Promise.all([full ? g(`/projects/${S.pid}/audit`) : null, full ? g(`/projects/${S.pid}/radar`) : null,
+      full ? g(`/projects/${S.pid}/scope`) : null, locked ? g(`/projects/${S.pid}/feedback`) : null, g(`/projects/${S.pid}/receipt`)]);
+    S.audit = a || []; S.radar = r; S.scope = sc; S.feedback = f || []; S.receipt = rc;
+  }
   render();
 }
 const allClaims = d => Object.values(d.buckets).flat();
@@ -230,16 +408,20 @@ function claimCard(c, locked) {
   const rej = c.status === 'rejected' ? 'opacity-50' : '';
   const src = c.source ? `<button data-act="src" data-id="${c.source.id}" data-claim="${c.id}" class="tip px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100" data-tip="Open the original ${esc(c.source.type)} with the proof highlighted.">🔎 ${esc(c.source.type)} · ${esc(c.source.ref)}</button>`
     : '<span class="text-rose-600">no source yet</span>';
-  const status = S.role === 'successor' ? '' :
+  const status = RES(S.role) ? '' :
     `<span class="px-1.5 rounded ${c.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : c.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}">${c.status}</span>`;
   const routed = c.routed_to ? `<span class="px-1.5 rounded bg-rose-50 text-rose-700">ask the ${esc(c.routed_to)}</span>` : '';
+  const fbs = (S.feedback || []).filter(f => f.claim_id === c.id);
+  const fbChip = fbs.length ? `<span class="px-1.5 rounded bg-fuchsia-50 text-fuchsia-700 tip" data-tip="Feedback raised on this claim after release.">🗣 ${fbs.length} feedback${fbs.some(f => f.status === 'open') ? ' · needs answer' : ''}</span>` : '';
+  const flag = RES(S.role) && S.data.project.status === 'locked' ? btn('flag', c.id, '🚩', 'Flag', 'border-fuchsia-300 text-fuchsia-700 hover:bg-fuchsia-50', 'Something wrong, unclear or missing here? Tell the leaver and manager. They must answer before you can acknowledge.') : '';
   return `<div class="card bg-white border rounded-xl p-3 ${sel} ${rej}" data-card="${c.id}">
     <div class="flex gap-2 items-start">${badge(c)}<p class="text-sm flex-1 ${c.status === 'rejected' ? 'line-through' : ''}">${fmt(c.text)}</p></div>
     ${c.edited && c.original ? `<div class="text-xs text-slate-400 mt-1">edited · original: ${fmt(c.original)}</div>` : ''}
     <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
       <span class="px-1.5 rounded bg-slate-100">${esc(c.component)}</span>${c.timestamp ? `<span>${esc(c.timestamp.slice(0, 10))}</span>` : ''}
-      ${src} ${status} ${routed}</div>
-    <div class="mt-2 flex flex-wrap gap-1.5">${claimButtons(c, locked)}</div></div>`;
+      ${src} ${status} ${routed} ${fbChip}</div>
+    ${c.gap ? gapPipe(c) : ''}
+    <div class="mt-2 flex flex-wrap gap-1.5">${claimButtons(c, locked)}${gapButtons(c)}${flag}</div></div>`;
 }
 function conflictBox(group, items, locked) {
   const vals = items.map(c => c.value).join(' or ');
@@ -277,7 +459,8 @@ function section(key, icon, title, sub, items, locked, d) {
       }
       const other = items.filter(c => !ATTR_GROUPS.some(a => a[0] === c.attribute));
       body += other.map(c => claimCard(c, locked)).join('');
-    } else body = items.map(c => claimCard(c, locked)).join('');
+    } else if (key === 'gaps' && !RES(S.role)) body = gapBoard(items) + items.map(c => claimCard(c, locked)).join('');
+    else body = items.map(c => claimCard(c, locked)).join('');
   }
   const bulk = S.role === 'leaver' && !locked && pend ? `<button data-act="bulk" data-key="${key}" class="tip btn border-emerald-300 text-emerald-700 hover:bg-emerald-50" data-tip="Approve the ${pend} pending claim(s) in this section in one click. You can still reject or edit any of them later.">✓ Approve ${pend}</button>` : '';
   return `<section id="sec-${key}" class="space-y-2">
@@ -371,21 +554,23 @@ function releasePanel(d) {
       <div class="bg-white/10 rounded-xl py-2"><div class="text-2xl font-extrabold text-slate-200">${pend}</div><div class="text-[11px] text-indigo-100">undecided (not sent)</div></div></div>
     <div class="flex flex-wrap gap-2 mt-3">
       <button data-act="approveAll" class="tip btn !text-sm !px-3 !py-1.5 border-white/40 text-white hover:bg-white/10" data-tip="Approves every pending claim except conflicts and missing-evidence items, which need a human answer.">✓ Approve all remaining</button>
-      <button data-act="lock" class="tip btn !text-sm !px-3 !py-1.5 bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-400" data-tip="Freezes the dossier and unlocks the Successor view. Blocked while conflicts are open.">🔒 Lock &amp; release</button></div>
+      <button data-act="lock" class="tip btn !text-sm !px-3 !py-1.5 bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-400" data-tip="Freezes the dossier and unlocks the Successor view. Blocked while conflicts are open.">🔒 Lock &amp; release</button>
+      <button data-act="ff" class="tip btn !text-sm !px-3 !py-1.5 border-fuchsia-300/60 text-fuchsia-200 hover:bg-white/10" data-tip="Demo shortcut: resolves conflicts with the suggested value, approves everything, grants contractors two components and releases. Then switch role to see every view.">⚡ Fast-forward demo</button></div>
     <p class="text-[11px] text-indigo-200 mt-2">${d.stats.dropped_ungrounded} extracted claim(s) were dropped automatically because no verbatim source quote backed them.</p></section>`;
 }
 function roleStrip(d) {
   const [i, h, t] = ROLE_INFO[d.role];
-  return `<div class="flex items-start gap-3 bg-white border rounded-2xl p-3"><div class="text-2xl">${i}</div>
-    <div class="text-sm"><b>${h}</b> <span class="text-slate-600">${t}</span></div></div>`;
+  return `<div id="roleStrip" class="flex items-start gap-3 bg-white border rounded-2xl p-3"><div class="text-2xl">${i}</div>
+    <div class="text-sm"><b>${h}</b> <span class="text-slate-600">${t}</span>${d.role === 'contractor' ? `<div class="mt-1 text-xs">Granted components: ${(d.scope || []).length ? d.scope.map(x => `<code>${esc(x)}</code>`).join(' ') : '<b>none yet</b>. Ask the leaver or manager to grant access.'}</div>` : ''}</div></div>`;
 }
 
 /* ---------- main render ---------- */
 function render() {
   const app = $('#app');
+  const tb = document.querySelector('#hdr [data-act=tour]'); if (tb) tb.innerHTML = '▶ Tour · ' + ROLE_SHORT[S.role];
   if (S.err) {
     const fresh = /not been released/i.test(S.err);
-    app.innerHTML = `<div class="bg-white border rounded-2xl p-8 max-w-xl mx-auto mt-10 text-center pop">
+    app.innerHTML = `<div id="blockedBox" class="bg-white border rounded-2xl p-8 max-w-xl mx-auto mt-10 text-center pop">
       <div class="text-5xl mb-2">🔒</div><p class="font-bold text-lg mb-1">${fresh ? 'Not released yet' : 'Access blocked'}</p>
       <p class="text-sm text-slate-600 mb-4">${esc(S.err)}</p>
       <p class="text-xs text-slate-500 mb-4">This is the server doing its job: a successor cannot see anything until the leaver locks the dossier.</p>
@@ -409,16 +594,16 @@ function render() {
   const road = roadmap(b);
   const roadmapHtml = road.length ? `<section id="roadmap" class="bg-gradient-to-br from-indigo-50 to-white border border-indigo-200 rounded-2xl p-4">
       <h3 class="font-bold text-indigo-900">🗺️ Day-1 continuation roadmap</h3>
-      <p class="text-xs text-slate-500">${d.role === 'successor' ? 'Start here. Click a line to see its proof.' : 'What the successor should do first, built automatically. Click a line to see its proof.'}</p>
+      <p class="text-xs text-slate-500">${RES(d.role) ? 'Start here. Click a line to see its proof.' : 'What the successor should do first, built automatically. Click a line to see its proof.'}</p>
       <ol class="mt-3 space-y-2">${road.map(([tag, t, c], i) => `<li class="flex gap-2 items-start">
         <span class="w-6 h-6 shrink-0 rounded-full bg-indigo-600 text-white text-xs font-bold grid place-items-center">${i + 1}</span>
         <button ${c.source ? `data-act="src" data-id="${c.source.id}" data-claim="${c.id}"` : 'data-act="noop"'} class="text-left text-sm hover:underline flex-1"><span class="text-[10px] font-bold px-1.5 py-0.5 rounded mr-1 ${TAG[tag]}">${tag}</span>${fmt(t)}</button></li>`).join('')}</ol></section>` : '';
   const sections = BUCKETS.map(([k, i, t, s]) => section(k, i, t, s, b[k], locked, d)).join('') ||
     '<p class="text-sm text-slate-500">Nothing approved yet.</p>';
-  const redactions = d.role !== 'successor' && d.redactions.length ? `<details class="bg-white border rounded-2xl p-3 text-sm">
+  const redactions = !RES(d.role) && d.redactions.length ? `<details class="bg-white border rounded-2xl p-3 text-sm">
       <summary class="cursor-pointer font-medium">🛡️ ${d.redactions.length} secret(s) masked before storage <span class="text-xs text-slate-400 font-normal">(click to see what and where; the secrets themselves are never stored)</span></summary>
       <ul class="mt-2 text-xs text-slate-600 space-y-0.5">${d.redactions.map(r => `<li><b>${esc(r.kind)}</b> in <code>${esc(r.location)}</code></li>`).join('')}</ul></details>` : '';
-  const auditHtml = d.role !== 'successor' ? auditSection() : '';
+  const auditHtml = !RES(d.role) ? auditSection() + scopeSection() : '';
   const banner = locked ? `<div class="bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm rounded-2xl p-3 flex flex-wrap items-center gap-3">
       <span class="text-xl">✅</span><span class="flex-1">Handover released on ${esc((d.project.locked_at || '').slice(0, 10))}. ${leaver ? 'The dossier is now read-only.' : ''}</span>
       ${leaver ? '<button data-act="asSuccessor" class="btn !text-sm !px-3 !py-1.5 bg-emerald-600 border-emerald-600 text-white">See what the successor sees →</button>' : ''}</div>` : '';
@@ -426,7 +611,7 @@ function render() {
     <div class="mb-4 flex flex-wrap items-end gap-3"><div class="flex-1"><h1 class="text-2xl font-extrabold text-slate-900">${esc(d.project.name)}</h1>
       <p class="text-sm text-slate-500">Handover from <b>${esc(d.project.leaver)}</b> · evidence up to ${esc((d.project.as_of || '').slice(0, 10))}</p></div></div>
     <div class="grid lg:grid-cols-5 gap-4 items-start">
-      <div class="lg:col-span-3 space-y-3">${roleStrip(d)}${banner}${leaver && !locked ? stepper(d) : ''}${legend()}${roadmapHtml}${debriefBox(d, locked)}${leaver && !locked ? releasePanel(d) : ''}${redactions}${auditHtml}${sections}</div>
+      <div class="lg:col-span-3 space-y-3">${roleStrip(d)}${banner}${receiptSection()}${leaver && !locked ? stepper(d) : ''}${legend()}${roadmapHtml}${radarSection()}${debriefBox(d, locked)}${leaver && !locked ? releasePanel(d) : ''}${feedbackPanel(locked)}${redactions}${auditHtml}${sections}</div>
       <aside class="lg:col-span-2 lg:sticky lg:top-20"><div id="inspector" class="bg-white border rounded-2xl overflow-hidden"></div></aside>
     </div>`;
   renderInspector();
@@ -490,6 +675,11 @@ async function act(el) {
     if (a === 'guide') { S.guide = !S.guide; try { localStorage.setItem('rt_guide', S.guide ? '1' : '0'); } catch (e) {} return render(); }
     if (a === 'go') { const t = document.querySelector(el.dataset.sel); if (t) t.scrollIntoView({behavior: 'smooth', block: 'center'}); else toast('Nothing to do here. This step is already clear.'); return; }
     if (a === 'tour') return startTour();
+    if (a === 'tourDemo') return enterDemo('leaver', startTour);
+    if (a === 'demo') return enterDemo('leaver');
+    if (a === 'enterRole') return enterDemo(el.dataset.role);
+    if (a === 'backToApp') return showLanding(false);
+    if (a === 'home') return showLanding(true);
     if (a === 'asLeaver') return switchRole('leaver');
     if (a === 'asSuccessor') return switchRole('successor');
     if (a === 'auditToggle') { S.auditOpen = !S.auditOpen; return render(); }
@@ -509,6 +699,42 @@ async function act(el) {
     else if (a === 'debrief') {
       const answers = {}; document.querySelectorAll('textarea[data-q]').forEach(t => answers[t.dataset.q] = t.value);
       const r = await post(`/projects/${S.pid}/debrief`, {answers}); toast(`${r.saved} answer(s) saved as STATED BY LEAVER claims`);
+    } else if (a === 'flag') {
+      const c = allClaims(S.data).find(x => x.id == id), r = await askFeedback(c.text);
+      if (!r) return; await post(`/projects/${S.pid}/feedback`, {claim_id: c.id, kind: r.kind, note: r.note}); toast('Sent to the leaver and manager');
+    } else if (a === 'raise') {
+      const r = await askFeedback('', 'missing'); if (!r) return;
+      await post(`/projects/${S.pid}/feedback`, {kind: r.kind, note: r.note}); toast('Sent to the leaver and manager');
+    } else if (a === 'reply') {
+      const f = S.feedback.find(x => x.id == id);
+      const t = await dialog({title: 'Answer the ' + f.author, desc: f.note, text: f.reply || '', yes: 'Send reply'}); if (!t || !t.trim()) return;
+      await post(`/feedback/${id}/reply`, {text: t});
+    } else if (a === 'closeFb') { await post(`/feedback/${id}/close`); toast('Thread closed');
+    } else if (a === 'assign') {
+      const c = allClaims(S.data).find(x => x.id == id);
+      const owner = await dialog({title: 'Who owns this gap?', desc: c.text.replace('No source answers: ', ''), text: c.gap.owner || (c.routed_to === 'leaver' ? S.data.project.leaver : ''), yes: 'Next'});
+      if (!owner || !owner.trim()) return;
+      const due = await dialog({title: 'Due date (optional)', desc: 'Format 2026-11-20. Leave empty for no deadline.', text: c.gap.due || '', yes: 'Assign'}); if (due === null) return;
+      await post(`/claims/${id}/gap`, {owner, due}); toast('Gap assigned');
+    } else if (a === 'verify') { await post(`/claims/${id}/verify`); toast('Answer verified');
+    } else if (a === 'saveScope') {
+      const comps = [...document.querySelectorAll('[data-scope]:checked')].map(x => x.dataset.scope);
+      await post(`/projects/${S.pid}/scope`, {components: comps}); toast(comps.length ? 'Contractor access saved' : 'Contractor access cleared');
+    } else if (a === 'ack') {
+      const t = await dialog({title: 'Acknowledge receipt', desc: 'You confirm you have received and understood this handover. Add an optional note for the record.', text: '', yes: '✍️ I acknowledge', danger: true}); if (t === null) return;
+      await post(`/projects/${S.pid}/acknowledge`, {text: t}); toast('Receipt acknowledged');
+    } else if (a === 'cosign') {
+      const t = await dialog({title: 'Co-sign this handover', desc: 'You confirm the successor has received the dossier. This completes the handover.', text: '', yes: '🏁 Co-sign', danger: true}); if (t === null) return;
+      await post(`/projects/${S.pid}/cosign`, {text: t}); toast('Handover complete 🎉'); confetti();
+    } else if (a === 'receipt') { return printReceipt();
+    } else if (a === 'ff') {
+      const ok = await dialog({title: 'Fast-forward the demo?', desc: 'Resolves open conflicts with the suggested value, approves every remaining claim, grants contractors the webhooks and ledger components, and releases the handover. A demo shortcut so you can see the Successor, Contractor and receipt views in seconds. Real reviews should be done by hand.', yes: '⚡ Fast-forward', danger: true});
+      if (!ok) return;
+      for (const c of allClaims(S.data)) if (c.trust === 'CONFLICT' && c.status === 'pending' && c.suggested) await post(`/claims/${c.id}/resolve`, {mode: 'winner'});
+      await post(`/projects/${S.pid}/approve-all`);
+      const comps = ['webhooks', 'ledger'].filter(x => (S.scope && S.scope.components || []).includes(x));
+      if (comps.length) await post(`/projects/${S.pid}/scope`, {components: comps});
+      await post(`/projects/${S.pid}/lock`); toast('Released. Switch role to see each view, or take the tour.'); confetti();
     } else if (a === 'approveAll') { const r = await post(`/projects/${S.pid}/approve-all`); toast(`${r.approved} claim(s) approved`); }
     else if (a === 'bulk') {
       const items = S.data.buckets[el.dataset.key].filter(c => c.status === 'pending' && c.trust !== 'CONFLICT' && c.trust !== 'MISSING EVIDENCE');
@@ -523,50 +749,258 @@ async function act(el) {
   } catch (e) { toast(e.message, true); }
 }
 
-/* ---------- guided tour ---------- */
-const TOUR = [
-  {sel: '#roleBox', t: 'Three people, one dossier', x: 'Switch roles here. The leaver edits, the manager oversees, the successor only sees what was approved. The server enforces this, not just the UI.'},
-  {sel: '#stepper', t: 'Your 5-step checklist', x: 'Progress updates live. Click any step to jump to it. Conflicts must be resolved before you can release.'},
-  {sel: '#roadmap', t: 'Day-1 roadmap', x: 'The first things a successor should do, generated from unmerged branches, open PRs, risky files and unanswered questions. Each line opens its proof.'},
-  {sel: '#conflictBox', t: 'Conflict detection', x: 'Slack says Redis, a Jira ticket says Kafka. RelayTrace will not guess: it shows both receipts, suggests the newest strongest source, and asks a human.'},
-  {sel: '[data-card] .tip', t: 'Trust labels', x: 'Every claim says how it is known: quoted from a source, stated by the leaver, inferred from patterns, in conflict, or missing. Hover any label.'},
-  {sel: '#inspector', t: 'Evidence inspector', x: 'Click a 🔎 source pill on any claim. The original commit, PR, ticket or chat opens here with the exact quote highlighted. No quote, no claim.'},
-  {sel: '#releaseBox', t: 'Release with confidence', x: 'This panel shows exactly how many claims the successor will see. Lock & release, then switch the role to Successor to see their view.'}
-];
-let tour = {steps: [], i: 0};
+/* ---------- role-aware guided tour ---------- */
+const ROLE_ORDER = ['leaver', 'manager', 'successor', 'contractor'];
+const ROLE_SHORT = {leaver: 'Leaver', manager: 'Manager', successor: 'Successor', contractor: 'Contractor'};
+const ROLE_NAME = {leaver: 'Outgoing contributor', manager: 'Manager', successor: 'Successor', contractor: 'Contractor'};
+function tourSteps(role) {
+  const openAudit = () => { if (!S.auditOpen) { S.auditOpen = true; render(); } };
+  const openGaps = () => { if (!S.open.gaps) { S.open.gaps = true; render(); } };
+  const T = {
+    leaver: [
+      {sel: '#roleBox', t: 'Four people, one dossier', x: 'Switch roles here. Each sees and can do different things, and the <b>server</b> enforces it, not just the screen. Demo PINs are one click.'},
+      {sel: '#stepper', t: 'Your 5-step checklist', x: 'Progress updates live. Click any step to jump to it. Conflicts must be resolved before you can release.'},
+      {sel: '#roadmap', t: 'Day-1 roadmap', x: 'The first things your successor should do, built from unmerged branches, open PRs, risky files and unanswered questions. Each line opens its proof.'},
+      {sel: '#radar', t: 'Temporal conflict radar', x: 'Every decision and every mention on one timeline. Big rings are decisions, small dots are mentions. It shows who spoke last and whether the older option is still being discussed. Resolve it right here.'},
+      {sel: '#conflictBox', t: 'Two sources disagree', x: 'Slack says Redis, a Jira ticket says Kafka. RelayTrace will not guess: it shows both receipts, suggests the newest strongest source, and asks you.'},
+      {sel: '[data-card] .tip', t: 'Trust labels', x: 'Every claim says how it is known: quoted from a source, stated by you, inferred from patterns, in conflict, or missing. Hover any label.'},
+      {sel: '#inspector', t: 'Evidence inspector', x: 'Click a 🔎 source pill on any claim. The original commit, PR, ticket or chat opens here with the exact quote highlighted. No quote, no claim.'},
+      {sel: '#gapBoard', before: openGaps, t: 'Gap tracker', x: 'Unknowns do not vanish at release. Each moves Open, Assigned, Answered, Verified, with an owner and due date. A manager verifies the answer.'},
+      {sel: '#scopeBox', t: 'Contractor access', x: 'Grant a contractor only the components they need. They get approved, shared claims for those components and nothing else.'},
+      {sel: '#auditBox', before: openAudit, t: 'Audit trail', x: 'Every approval, rejection, edit and visibility change is logged with who, when and what changed. Export it as CSV.'},
+      {sel: '#releaseBox', t: 'Release with confidence', x: 'See exactly how many claims the successor will get. <b>⚡ Fast-forward</b> resolves, approves and releases the demo in one click so you can tour the other roles.'},
+      {sel: '#receiptBox', t: 'Co-signed receipt', x: 'After release the successor can question claims, acknowledge receipt, and the manager co-signs. A SHA-256 fingerprint proves what was handed over.'}
+    ],
+    manager: [
+      {sel: '#roleStrip', t: 'You are the project lead', x: 'You see everything the leaver sees, including rejected and manager-only claims, plus the redaction report and audit trail. Decisions on claims stay with the leaver.'},
+      {sel: '#radar', t: 'How conflicts were resolved', x: 'The same timeline the leaver used. Check which side won and whether anything newer still mentions the older option.'},
+      {sel: '#gapBoard', before: openGaps, t: 'Verify the answers', x: 'When the leaver answers a missing-evidence item it lands in <b>Answered</b>. Only a manager can mark it <b>Verified</b> with 🔏.'},
+      {sel: '#fbBox', t: 'Successor feedback inbox', x: 'After release the successor can flag claims. You and the leaver can reply here.'},
+      {sel: '#auditBox', before: openAudit, t: 'Audit trail', x: 'A complete, exportable history of every action in this handover.'},
+      {sel: '#scopeBox', t: 'Contractor access', x: 'You can grant or revoke which components a contractor may see.'},
+      {sel: '#receiptBox', t: 'Co-sign to complete', x: 'Once the successor acknowledges, <b>🏁 Co-sign</b> appears for you. That completes the handover and fixes the SHA-256 receipt.'}
+    ],
+    successor: [
+      {sel: '#blockedBox', t: 'Locked until release', x: 'You cannot see anything until the leaver approves and releases the dossier. The server blocks it, not just the page. Tip: in the leaver view, ⚡ Fast-forward releases the demo.'},
+      {sel: '#roleStrip', t: 'You are the successor', x: 'You only receive claims the leaver approved and chose to share. Nothing else leaks through.'},
+      {sel: '#receiptBox', t: 'Your handover receipt', x: 'Track the sign-off here: released, you acknowledge, the manager co-signs.'},
+      {sel: '#roadmap', t: 'Start here', x: 'A Day-1 roadmap built from the leaver’s approved claims. Click a line to see its proof.'},
+      {sel: '[data-card] [data-act=src]', t: 'Every claim has a receipt', x: 'This pill opens the original commit, PR, ticket or chat message.'},
+      {sel: '#inspector', t: 'The proof, highlighted', x: 'The exact quote that backs the claim is highlighted in its source.'},
+      {sel: '[data-card] [data-act=flag]', t: 'Question anything', x: 'Wrong, unclear or missing? Flag it with 🚩. The leaver must answer before you can acknowledge.'},
+      {sel: '#fbBox', t: 'Your feedback thread', x: 'Answers appear here. Accept an answer to close the thread, then acknowledge receipt.'}
+    ],
+    contractor: [
+      {sel: '#blockedBox', t: 'Locked until release', x: 'Contractors get access after the leaver releases the handover.'},
+      {sel: '#roleStrip', t: 'A narrower view', x: 'You only see approved, shared claims for the components you were granted. No debrief, no audit trail, no routing hints.'},
+      {sel: '[data-card]', t: 'Scoped claims', x: 'Everything here belongs to a component you were granted.'},
+      {sel: '[data-card] [data-act=src]', t: 'Still provable', x: 'Each claim still links to its original evidence.'},
+      {sel: '[data-card] [data-act=flag]', t: 'Raise a question', x: 'You can flag claims too. The leaver or manager answers.'},
+      {sel: '#fbBox', t: 'Your feedback thread', x: 'Your questions and the answers live here.'}
+    ]
+  };
+  return T[role] || [];
+}
+let tour = {steps: [], i: 0, role: 'leaver'};
+const tourVisible = sel => { const el = document.querySelector(sel); return el && (el.offsetParent !== null || getComputedStyle(el).position === 'fixed') ? el : null; };
 function startTour() {
-  if (!S.data) { toast('Load the sample project first, then take the tour.'); return; }
-  if (S.role !== 'leaver') {
-    if (!S.tokens.leaver) { openLogin('leaver', true); toast('Sign in as the outgoing contributor to run the tour.'); return; }
-    $('#roleSel').value = S.role = 'leaver'; S.selSource = null; loadDossier().then(startTour); return;
-  }
-  tour.steps = TOUR.filter(s => document.querySelector(s.sel)); tour.i = 0;
-  $('#tourLayer').classList.remove('hidden'); showTour();
+  if (!S.data && !S.err) { enterDemo('leaver', startTour); return; }
+  tour.role = S.role;
+  tour.steps = tourSteps(S.role).filter(s => { if (s.before) s.before(); return tourVisible(s.sel); });
+  if (!tour.steps.length) { toast('Nothing to tour on this screen yet.'); return; }
+  tour.i = 0; $('#tourLayer').classList.remove('hidden'); showTour();
+}
+function placeTour() {
+  const s = tour.steps[tour.i], el = s && tourVisible(s.sel); if (!el) return;
+  const r = el.getBoundingClientRect(), sp = $('#spot'), pad = 8;
+  sp.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px`;
+  const card = $('#tourCard'), ch = card.offsetHeight || 220, cw = Math.min(360, innerWidth * .92);
+  const below = r.bottom + 16 + ch < innerHeight, above = r.top - 16 - ch > 0;
+  card.style.top = Math.max(10, Math.min(innerHeight - ch - 10, below ? r.bottom + 16 : above ? r.top - ch - 16 : innerHeight / 2 - ch / 2)) + 'px';
+  card.style.left = Math.max(10, Math.min(innerWidth - cw - 10, r.left)) + 'px';
 }
 function showTour() {
   const s = tour.steps[tour.i]; if (!s) return endTour();
-  const el = document.querySelector(s.sel); el.scrollIntoView({block: 'center', behavior: 'smooth'});
-  setTimeout(() => {
-    const r = el.getBoundingClientRect(), sp = $('#spot'), pad = 8;
-    sp.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px`;
-    const card = $('#tourCard'), last = tour.i === tour.steps.length - 1;
-    card.innerHTML = `<div class="text-[11px] text-indigo-600 font-bold">STEP ${tour.i + 1} OF ${tour.steps.length}</div><div class="font-bold mt-0.5">${s.t}</div>
-      <p class="text-sm text-slate-600 mt-1">${s.x}</p><div class="flex justify-between mt-3"><button id="tSkip" class="text-xs text-slate-500">Skip tour</button>
-      <div class="flex gap-2">${tour.i ? '<button id="tBack" class="btn border-slate-300">Back</button>' : ''}<button id="tNext" class="btn bg-indigo-600 border-indigo-600 text-white">${last ? 'Finish ✓' : 'Next →'}</button></div></div>`;
-    const below = r.bottom + 12 + 190 < window.innerHeight;
-    card.style.top = (below ? r.bottom + 14 : Math.max(10, r.top - 200)) + 'px';
-    card.style.left = Math.min(Math.max(10, r.left), window.innerWidth - 350) + 'px';
-    $('#tNext').onclick = () => { tour.i++; showTour(); };
-    $('#tSkip').onclick = endTour; if ($('#tBack')) $('#tBack').onclick = () => { tour.i--; showTour(); };
-  }, 380);
+  if (s.before) s.before();
+  const el = tourVisible(s.sel); if (!el) { tour.i++; return showTour(); }
+  if (el.closest('#hdr')) window.scrollTo({top: 0, behavior: 'smooth'}); else el.scrollIntoView({block: 'center', behavior: 'smooth'});
+  const n = tour.steps.length, last = tour.i === n - 1, next = ROLE_ORDER[(ROLE_ORDER.indexOf(tour.role) + 1) % ROLE_ORDER.length];
+  $('#tourCard').innerHTML = `<div class="flex items-center gap-2 text-[11px] font-bold"><span class="px-2 py-0.5 rounded-full" style="background:rgba(129,140,248,.18);color:#818cf8">${ROLE_TILE[tour.role][0]} ${ROLE_NAME[tour.role].toUpperCase()}</span><span style="color:var(--muted)">STEP ${tour.i + 1} OF ${n}</span></div>
+    <div class="font-bold text-base mt-2">${s.t}</div><p class="text-sm mt-1" style="color:var(--muted)">${s.x}</p>
+    <div class="flex gap-1 mt-3">${tour.steps.map((_, k) => `<span style="height:4px;flex:1;border-radius:9px;background:${k <= tour.i ? '#818cf8' : 'rgba(129,140,248,.25)'}"></span>`).join('')}</div>
+    <div class="flex items-center justify-between mt-3"><button id="tSkip" class="text-xs" style="color:var(--muted)">Skip tour</button>
+      <div class="flex gap-2">${tour.i ? '<button id="tBack" class="btn border-slate-300">← Back</button>' : ''}<button id="tNext" class="btn bg-indigo-600 border-indigo-600 text-white">${last ? 'Finish ✓' : 'Next →'}</button></div></div>
+    ${last ? `<button id="tRole" class="mt-3 w-full btn justify-center border-indigo-300 text-indigo-600">Continue: tour as ${ROLE_NAME[next]} →</button>` : ''}`;
+  setTimeout(placeTour, 420); setTimeout(placeTour, 900);
+  $('#tNext').onclick = () => { tour.i++; showTour(); };
+  $('#tSkip').onclick = endTour; if ($('#tBack')) $('#tBack').onclick = () => { tour.i--; showTour(); };
+  if ($('#tRole')) $('#tRole').onclick = () => { endTour(); enterDemo(next, startTour); };
 }
 function endTour() { $('#tourLayer').classList.add('hidden'); }
+addEventListener('resize', () => { if (!$('#tourLayer').classList.contains('hidden')) placeTour(); });
+addEventListener('scroll', () => { if (!$('#tourLayer').classList.contains('hidden')) requestAnimationFrame(placeTour); }, true);
+document.addEventListener('keydown', e => {
+  if ($('#tourLayer').classList.contains('hidden')) return;
+  if (e.key === 'ArrowRight' || e.key === 'Enter') { tour.i++; showTour(); } else if (e.key === 'ArrowLeft' && tour.i) { tour.i--; showTour(); }
+});
+
+
+
+/* ---------- Improvement 1: temporal conflict radar + gap tracker ---------- */
+const LANE = ['#818cf8', '#f472b6', '#34d399', '#fbbf24'];
+const dstr = t => new Date(t).toISOString().slice(0, 10);
+function radarSection() {
+  const R = S.radar; if (!R || !R.groups.length) return '';
+  const asOf = Date.parse(R.as_of) || Date.now();
+  return `<section id="radar" class="rounded-2xl p-4 text-white bg-gradient-to-br from-slate-900 to-indigo-950">
+    <div class="flex items-center gap-2"><span class="text-xl">📡</span><h3 class="font-bold">Temporal conflict radar</h3></div>
+    <p class="text-xs text-indigo-200 mb-3">Each dot is evidence on a timeline. <b>Big rings</b> are explicit decisions; <b>small dots</b> are other sources that merely mention a technology. Hover a dot for the quote, click it for the original.</p>
+    ${R.groups.map(g => radarGroup(g, asOf)).join('')}</section>`;
+}
+function radarGroup(g, asOf) {
+  const times = g.points.map(p => Date.parse(p.ts)).filter(x => !isNaN(x));
+  const t0 = Math.min(...times), t1 = Math.max(asOf, ...times), span = Math.max(t1 - t0, 864e5);
+  const pos = ts => Math.min(97, Math.max(3, (Date.parse(ts) - t0) / span * 100));
+  const lanes = g.values.map((v, i) => {
+    const col = LANE[i % LANE.length];
+    const dots = g.points.filter(p => p.value === v).map(p => p.kind === 'claim'
+      ? `<button class="dot" style="left:${pos(p.ts)}%;top:50%;width:20px;height:20px;background:${col};box-shadow:0 0 0 4px ${p.status === 'approved' ? 'rgba(52,211,153,.55)' : p.status === 'rejected' ? 'rgba(148,163,184,.25)' : 'rgba(251,191,36,.45)'};${p.status === 'rejected' ? 'opacity:.45' : ''}"
+          data-tip="${esc(dstr(Date.parse(p.ts)))} · ${esc(p.source.type)} ${esc(p.source.ref)}: “${esc(p.quote)}” (${p.status})" data-act="src" data-id="${p.source.id}" data-claim="${p.id}"></button>`
+      : `<button class="dot" style="left:${pos(p.ts)}%;top:50%;width:10px;height:10px;background:${col};opacity:.7"
+          data-tip="${esc(dstr(Date.parse(p.ts)))} · ${esc(p.source.type)} ${esc(p.source.ref)} mentions ${esc(v)}: ${esc(p.snippet)}" data-act="src" data-id="${p.source.id}" data-claim="0"></button>`).join('');
+    return `<div class="flex items-center gap-3 h-14"><div class="w-24 shrink-0 text-sm font-bold" style="color:${col}">${esc(v)}${g.winner === v ? ' ✓' : ''}</div>
+      <div class="relative flex-1 h-full"><div class="absolute left-0 right-0 top-1/2 h-px bg-white/20"></div>${dots}</div></div>`;
+  }).join('');
+  const last = g.values.map(v => ({v, ts: g.points.filter(p => p.kind === 'claim' && p.value === v).map(p => p.ts).sort().pop() || ''})).sort((a, b) => b.ts.localeCompare(a.ts));
+  let insight = '';
+  if (last.length > 1 && last[0].ts && last[1].ts) {
+    const gap = Math.round((Date.parse(last[0].ts) - Date.parse(last[1].ts)) / 864e5);
+    const later = g.points.filter(p => p.kind === 'mention' && p.value === last[1].v && p.ts > last[1].ts).length;
+    insight = `Newest decision: <b>${esc(last[0].v)}</b> (${last[0].ts.slice(0, 10)}), ${gap} days after the last decision for ${esc(last[1].v)}.` +
+      (later ? ` But ${esc(last[1].v)} is still mentioned in <b>${later}</b> later source${later > 1 ? 's' : ''}, so it may still be live. Newest is a hint, not proof.` : '');
+  }
+  const pend = g.points.filter(p => p.kind === 'claim' && p.status === 'pending');
+  const actions = g.state === 'open' && S.role === 'leaver' && S.data.project.status !== 'locked'
+    ? `<div class="flex flex-wrap gap-2 mt-3">${g.values.map(v => { const c = pend.find(p => p.value === v); return c ? `<button data-act="winner" data-id="${c.id}" class="btn !text-sm !px-3 !py-1.5 bg-indigo-500 border-indigo-400 text-white tip" data-tip="Marks ${esc(v)} as correct and rejects the other side.">✔ ${esc(v)} is current</button>` : ''; }).join('')}
+        ${pend[0] ? `<button data-act="unknown" data-id="${pend[0].id}" class="btn !text-sm !px-3 !py-1.5 border-white/30 text-indigo-100 tip" data-tip="Rejects both and opens a gap for the manager.">I don't know</button>` : ''}</div>` : '';
+  const state = g.state === 'open' ? '<span class="px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[11px] font-bold">OPEN CONFLICT</span>'
+    : g.state === 'resolved' ? `<span class="px-2 py-0.5 rounded-full bg-emerald-400 text-emerald-950 text-[11px] font-bold">RESOLVED → ${esc(g.winner)}</span>`
+    : '<span class="px-2 py-0.5 rounded-full bg-slate-400 text-slate-900 text-[11px] font-bold">UNKNOWN</span>';
+  return `<div class="bg-white/5 border border-white/10 rounded-xl p-3 mb-2"><div class="flex items-center gap-2 mb-1"><span class="font-bold">${esc(g.component)} <span class="text-indigo-300">/ ${esc(g.attribute)}</span></span>${state}</div>
+    ${lanes}<div class="flex justify-between text-[11px] text-indigo-300 pl-[108px]"><span>${dstr(t0)}</span><span>${dstr(t1)} (latest evidence)</span></div>
+    ${insight ? `<p class="text-xs text-indigo-100 mt-2">${insight}</p>` : ''}${actions}</div>`;
+}
+const GAP_STEPS = [['open', 'Open'], ['assigned', 'Assigned'], ['answered', 'Answered'], ['verified', 'Verified']];
+function gapPipe(c) {
+  const st = c.gap.state; if (st === 'dismissed') return '<div class="mt-2 text-[11px] text-slate-400">dismissed</div>';
+  const idx = GAP_STEPS.findIndex(x => x[0] === st);
+  const overdue = c.gap.due && c.gap.due < new Date().toISOString().slice(0, 10) && idx < 2;
+  return `<div class="mt-2 flex flex-wrap items-center gap-1 text-[11px]">${GAP_STEPS.map(([k, l], i) => `<span class="px-1.5 py-0.5 rounded-full ${i < idx ? 'bg-emerald-100 text-emerald-700' : i === idx ? 'bg-indigo-600 text-white font-bold' : 'bg-slate-100 text-slate-400'}">${i < idx ? '✓ ' : ''}${l}</span>${i < 3 ? '<span class="text-slate-300">›</span>' : ''}`).join('')}
+    ${c.gap.owner ? `<span class="ml-1 text-slate-500">owner <b>${esc(c.gap.owner)}</b></span>` : ''}${c.gap.due ? `<span class="${overdue ? 'text-rose-600 font-bold' : 'text-slate-500'}">· due ${esc(c.gap.due)}${overdue ? ' (overdue)' : ''}</span>` : ''}</div>`;
+}
+function gapButtons(c) {
+  if (!c.gap || RES(S.role)) return '';
+  let h = '';
+  if (['open', 'assigned'].includes(c.gap.state)) h += btn('assign', c.id, '🧭', c.gap.owner ? 'Reassign' : 'Assign owner', 'border-indigo-300 text-indigo-700 hover:bg-indigo-50', 'Give this unknown a named owner and a due date so it cannot be forgotten.');
+  if (c.gap.state === 'answered' && S.role === 'manager') h += btn('verify', c.id, '🔏', 'Verify answer', 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700', 'Manager sign-off: you have checked this answer and it is correct.');
+  return h;
+}
+function gapBoard(items) {
+  const cols = [['open', 'Open', 'border-rose-200 bg-rose-50'], ['assigned', 'Assigned', 'border-amber-200 bg-amber-50'], ['answered', 'Answered', 'border-sky-200 bg-sky-50'], ['verified', 'Verified', 'border-emerald-200 bg-emerald-50']];
+  return `<div id="gapBoard" class="grid grid-cols-2 md:grid-cols-4 gap-2"><div class="col-span-full text-xs text-slate-500">🧭 <b>Gap tracker</b>: every unknown moves Open → Assigned → Answered → Verified, so none is forgotten after release.</div>
+    ${cols.map(([k, l, cls]) => { const it = items.filter(c => c.gap && c.gap.state === k);
+      return `<div class="border rounded-xl p-2 ${cls}"><div class="text-xs font-bold mb-1">${l} · ${it.length}</div>${it.map(c => `<button data-act="go" data-sel="[data-card='${c.id}']" class="block w-full text-left text-[11px] bg-white border rounded-lg px-1.5 py-1 mb-1 hover:bg-slate-50">${esc(c.attribute)}${c.gap.owner ? ' · ' + esc(c.gap.owner) : ''}</button>`).join('') || '<div class="text-[11px] text-slate-400">nothing here</div>'}</div>`; }).join('')}</div>`;
+}
+
+/* ---------- Improvement 2 (part 2): contractor access ---------- */
+function scopeSection() {
+  const sc = S.scope; if (!sc) return '';
+  return `<section id="scopeBox" class="bg-white border rounded-2xl p-3">
+    <div class="flex items-center gap-2"><span class="text-xl">🧰</span><div><div class="font-bold">Contractor access</div>
+      <div class="text-xs text-slate-500">Choose which components a contractor may see. They only ever receive approved, shared claims for these, after release.</div></div></div>
+    <div class="flex flex-wrap gap-2 mt-2">${sc.components.map(x => `<label class="text-xs flex items-center gap-1 px-2 py-1 border rounded-full cursor-pointer hover:bg-slate-50"><input type="checkbox" data-scope="${esc(x)}" ${sc.selected.includes(x) ? 'checked' : ''}> ${esc(x)}</label>`).join('')}</div>
+    <button data-act="saveScope" class="tip mt-2 btn border-indigo-300 text-indigo-700 hover:bg-indigo-50" data-tip="Saves the list. Logged in the audit trail.">Save access</button></section>`;
+}
+
+/* ---------- Improvement 3: feedback loop + receipt ---------- */
+const KIND = {wrong: ['🚫', 'Wrong', 'bg-rose-100 text-rose-800'], unclear: ['🤔', 'Unclear', 'bg-amber-100 text-amber-800'], missing: ['➕', 'Missing', 'bg-sky-100 text-sky-800']};
+function fbItem(f) {
+  const [i, l, cls] = KIND[f.kind] || KIND.unclear;
+  const st = f.status === 'open' ? '<span class="text-[10px] font-bold px-1.5 rounded bg-rose-100 text-rose-700">waiting for answer</span>' : f.status === 'answered' ? '<span class="text-[10px] font-bold px-1.5 rounded bg-sky-100 text-sky-700">answered</span>' : '<span class="text-[10px] font-bold px-1.5 rounded bg-emerald-100 text-emerald-700">closed</span>';
+  const mine = RES(S.role);
+  return `<li class="border rounded-xl p-2.5 text-sm"><div class="flex flex-wrap items-center gap-2"><span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${cls}">${i} ${l}</span>${st}
+      ${mine ? '' : `<span class="text-[10px] px-1.5 rounded ${ACTOR[f.author] || ''}">${esc(f.author)}</span>`}<span class="text-[11px] text-slate-400 ml-auto">${esc((f.created || '').slice(0, 16).replace('T', ' '))}</span></div>
+    ${f.claim_text ? `<div class="text-xs text-slate-500 mt-1 italic">on: ${fmt(String(f.claim_text).slice(0, 140))}</div>` : ''}
+    <p class="mt-1">${esc(f.note)}</p>${f.reply ? `<div class="mt-1.5 text-xs bg-slate-50 border-l-2 border-indigo-400 pl-2 py-1"><b>${esc(f.replied_by)}:</b> ${esc(f.reply)}</div>` : ''}
+    <div class="mt-1.5 flex gap-1.5">${!mine && f.status !== 'closed' ? btn('reply', f.id, '💬', f.reply ? 'Edit reply' : 'Reply', 'border-indigo-300 text-indigo-700 hover:bg-indigo-50', 'Answer this question so the successor can move on.') : ''}
+      ${mine && f.status === 'answered' ? btn('closeFb', f.id, '🤝', 'Accept answer', 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700', 'You are satisfied. This closes the thread.') : ''}</div></li>`;
+}
+function feedbackPanel(locked) {
+  if (!locked) return '';
+  const fb = S.feedback || [], open = fb.filter(f => f.status === 'open').length;
+  if (RES(S.role)) return `<section id="fbBox" class="bg-white border rounded-2xl p-4"><div class="flex items-center gap-2"><span class="text-xl">🗣️</span>
+      <div class="flex-1"><h3 class="font-bold">Your feedback to the leaver</h3><p class="text-xs text-slate-500">Flag any claim with 🚩, or tell them what is missing. They must answer before you can acknowledge receipt.</p></div>
+      <button data-act="raise" class="btn !text-sm !px-3 !py-1.5 border-fuchsia-300 text-fuchsia-700 hover:bg-fuchsia-50 tip" data-tip="Something is not in this handover at all? Say so here.">➕ Something is missing</button></div>
+      <ul class="mt-2 space-y-2">${fb.map(fbItem).join('') || '<li class="text-sm text-slate-500">Nothing raised yet.</li>'}</ul></section>`;
+  return `<section id="fbBox" class="bg-white border rounded-2xl p-4"><div class="flex items-center gap-2"><span class="text-xl">📥</span>
+      <div class="flex-1"><h3 class="font-bold">Successor feedback inbox <span class="text-xs text-slate-400 font-normal">${fb.length} thread${fb.length === 1 ? '' : 's'}${open ? ` · <b class="text-rose-600">${open} waiting</b>` : ''}</span></h3>
+      <p class="text-xs text-slate-500">After release the successor can question any claim. Answer here; they accept the answer, then sign off.</p></div></div>
+      <ul class="mt-2 space-y-2">${fb.map(fbItem).join('') || '<li class="text-sm text-slate-500">No feedback yet.</li>'}</ul></section>`;
+}
+function receiptSection() {
+  const r = S.receipt; if (!r || r.status === 'draft') return '';
+  const steps = [['Released', true, r.locked_at], ['Successor acknowledged', !!r.s_ack_at, r.s_ack_at], ['Manager co-signed', !!r.m_ack_at, r.m_ack_at]];
+  const head = r.status === 'completed' ? '✅ Handover complete: signed by both sides' : r.status === 'acknowledged' ? '⏳ Waiting for the manager to co-sign' : '📬 Released: waiting for the successor to acknowledge';
+  const canAck = S.role === 'successor' && !r.s_ack_at, canSign = S.role === 'manager' && r.s_ack_at && !r.m_ack_at;
+  return `<section id="receiptBox" class="rounded-2xl p-4 border-2 ${r.status === 'completed' ? 'border-emerald-300 bg-emerald-50' : 'border-indigo-200 bg-white'}">
+    <div class="flex flex-wrap items-center gap-2"><span class="text-xl">🧾</span><h3 class="font-bold flex-1">Handover receipt</h3>
+      <span class="text-xs font-semibold">${head}</span></div>
+    <ol class="mt-3 grid sm:grid-cols-3 gap-2">${steps.map(([l, ok, t], i) => `<li class="flex items-center gap-2 text-sm"><span class="w-6 h-6 rounded-full grid place-items-center text-xs font-bold ${ok ? 'step-done' : 'step-todo'} border">${ok ? '✓' : i + 1}</span>
+      <div><div class="font-medium leading-tight">${l}</div><div class="text-[11px] text-slate-400">${ok && t ? esc(t.slice(0, 16).replace('T', ' ')) : 'pending'}</div></div></li>`).join('')}</ol>
+    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+      <span class="tip" data-tip="${esc(r.fingerprint)}">🔐 SHA-256 of the ${r.claims_released} released claims: <code>${esc(r.fingerprint.slice(0, 16))}…</code></span>
+      ${r.open_feedback ? `<span class="text-rose-600 font-semibold">${r.open_feedback} feedback thread(s) waiting for an answer</span>` : ''}</div>
+    <div class="mt-3 flex flex-wrap gap-2">
+      ${canAck ? `<button data-act="ack" class="btn !text-sm !px-3 !py-1.5 bg-indigo-600 border-indigo-600 text-white tip" data-tip="You confirm you received and understood this handover. Blocked while your feedback is unanswered.">✍️ Acknowledge receipt</button>` : ''}
+      ${canSign ? `<button data-act="cosign" class="btn !text-sm !px-3 !py-1.5 bg-emerald-600 border-emerald-600 text-white tip" data-tip="Manager co-signature closes the handover.">🏁 Co-sign handover</button>` : ''}
+      <button data-act="receipt" class="btn !text-sm !px-3 !py-1.5 border-slate-300 text-slate-700 hover:bg-slate-50 tip" data-tip="Opens a printable receipt. Choose 'Save as PDF' in the print dialog.">🖨 Download receipt (PDF)</button></div></section>`;
+}
+function printReceipt() {
+  const r = S.receipt; if (!r) return;
+  const w = window.open('', '_blank'); if (!w) { toast('Allow pop-ups to download the receipt.', true); return; }
+  const row = (a, b) => `<tr><td style="padding:6px 10px;color:#64748b;width:200px">${a}</td><td style="padding:6px 10px">${b}</td></tr>`;
+  w.document.write(`<!doctype html><title>Handover receipt</title><body style="font-family:Inter,system-ui,sans-serif;max-width:720px;margin:40px auto;color:#0f172a">
+    <div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#4f46e5,#d946ef);color:#fff;font-weight:900;display:grid;place-items:center">R</div><b style="font-size:20px">RelayTrace</b></div>
+    <h1 style="margin:18px 0 4px">Handover receipt</h1><div style="color:#64748b;margin-bottom:14px">${esc(r.project)}</div>
+    <div style="display:inline-block;padding:4px 12px;border-radius:99px;font-weight:700;background:${r.status === 'completed' ? '#d1fae5' : '#fef3c7'};color:${r.status === 'completed' ? '#065f46' : '#92400e'}">${r.status.toUpperCase()}</div>
+    <table style="width:100%;border-collapse:collapse;margin-top:16px;border:1px solid #e2e8f0;font-size:14px">
+      ${row('Outgoing contributor', esc(r.leaver))}${row('Released', esc((r.locked_at || '').replace('T', ' ')))}${row('Claims released', r.claims_released)}
+      ${row('Successor acknowledged', r.s_ack_at ? esc(r.s_ack_at.replace('T', ' ')) + (r.s_note ? '<br><i>“' + esc(r.s_note) + '”</i>' : '') : 'not yet')}
+      ${row('Manager co-signed', r.m_ack_at ? esc(r.m_ack_at.replace('T', ' ')) + (r.m_note ? '<br><i>“' + esc(r.m_note) + '”</i>' : '') : 'not yet')}
+      ${row('Content fingerprint (SHA-256)', '<code style="word-break:break-all;font-size:12px">' + esc(r.fingerprint) + '</code>')}</table>
+    <p style="color:#64748b;font-size:12px;margin-top:14px">The fingerprint is a hash of exactly the claims released to the successor. If any claim changed after sign-off, the hash would no longer match.</p>
+    <script>setTimeout(function(){window.print()},300)<\/script></body>`);
+  w.document.close();
+}
+let fbKind = 'unclear';
+function askFeedback(claimText, kind) {
+  return new Promise(res => {
+    fbKind = kind || 'unclear';
+    const paint = () => { $('#fbKinds').innerHTML = Object.entries(KIND).map(([k, [i, l]]) => `<button type="button" data-kind="${k}" class="border rounded-lg py-2 text-sm ${k === fbKind ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-50'}">${i} ${l}</button>`).join(''); };
+    paint(); $('#fbClaim').textContent = claimText ? 'About: ' + claimText.slice(0, 140) : 'About: something missing from the handover';
+    $('#fbNote').value = ''; $('#fb').style.display = 'flex'; setTimeout(() => $('#fbNote').focus(), 50);
+    $('#fbKinds').onclick = e => { const b = e.target.closest('[data-kind]'); if (b) { fbKind = b.dataset.kind; paint(); } };
+    const done = v => { $('#fb').style.display = 'none'; res(v); };
+    $('#fbYes').onclick = () => { const n = $('#fbNote').value.trim(); if (!n) { toast('Write a short note first.', true); return; } done({kind: fbKind, note: n}); };
+    $('#fbNo').onclick = () => done(null);
+  });
+}
 
 
 /* ---------- audit trail ---------- */
 const EV_ICON = {approve: '✅', reject: '❌', reset: '↺', visibility: '👁', edit: '✎', answer_gap: '💬', resolve_conflict: '⚡',
-  mark_unknown: '❓', approve_all: '✅', lock_release: '🚀', debrief_saved: '🎤', project_created: '🆕'};
-const ACTOR = {leaver: 'bg-indigo-100 text-indigo-800', manager: 'bg-sky-100 text-sky-800', system: 'bg-slate-200 text-slate-700', successor: 'bg-emerald-100 text-emerald-800'};
+  mark_unknown: '❓', approve_all: '✅', gap_assign: '🧭', gap_verify: '🔏', scope_changed: '🧰', feedback: '🗣️', feedback_reply: '💬', feedback_closed: '🤝', acknowledge: '✍️', cosign: '🏁', lock_release: '🚀', debrief_saved: '🎤', project_created: '🆕'};
+const ACTOR = {leaver: 'bg-indigo-100 text-indigo-800', manager: 'bg-sky-100 text-sky-800', system: 'bg-slate-200 text-slate-700', successor: 'bg-emerald-100 text-emerald-800', contractor: 'bg-orange-100 text-orange-800'};
 function auditSection() {
   const ev = S.audit || [], shown = S.auditAll ? ev : ev.slice(0, 12);
   const rows = shown.map(e => `<li class="flex gap-2 items-start py-1.5 border-b last:border-0">
@@ -594,7 +1028,8 @@ function exportAudit() {
 /* ---------- sign-in ---------- */
 const ROLE_TILE = {leaver: ['🧑‍💻', 'Outgoing contributor', 'Reviews, edits and releases the handover.'],
   manager: ['🧭', 'Project lead / manager', 'Sees everything plus the audit trail.'],
-  successor: ['🎯', 'Successor', 'Receives only what was approved and shared.']};
+  successor: ['🎯', 'Successor', 'Receives only what was approved and shared.'],
+  contractor: ['🧰', 'Contractor', 'Sees only the components you grant them.']};
 let loginPref = 'leaver';
 function openLogin(pref, dismissable) {
   loginPref = pref || 'leaver';
@@ -613,12 +1048,13 @@ async function doLogin(role, pin) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { $('#loginErr').textContent = j.detail || 'Sign-in failed'; return; }
   S.tokens[role] = j.token; saveTokens(); S.role = role; $('#roleSel').value = role;
-  S.selSource = null; S.selClaim = null; $('#login').style.display = 'none';
-  await loadProjects(); await loadDossier();
+  S.selSource = null; S.selClaim = null; $('#login').style.display = 'none'; showLanding(false);
+  await loadProjects(); await loadDossier(); enterAnim();
 }
+function enterAnim() { const a = $('#app'); a.classList.remove('enter'); void a.offsetWidth; a.classList.add('enter'); }
 function switchRole(role) {
   if (!S.tokens[role]) { $('#roleSel').value = S.role; openLogin(role, true); return; }
-  S.role = role; $('#roleSel').value = role; S.selSource = null; S.selClaim = null; return loadDossier();
+  S.role = role; $('#roleSel').value = role; S.selSource = null; S.selClaim = null; showLanding(false); return loadDossier().then(enterAnim);
 }
 document.addEventListener('submit', e => {
   const f = e.target.closest('[data-login]'); if (!f) return;
@@ -629,11 +1065,180 @@ document.addEventListener('click', e => {
   const f = b.closest('form'); f.querySelector('input').value = PIN_HINT[b.dataset.fill]; f.querySelector('input').focus();
 });
 
+/* ---------- landing page ---------- */
+const L_STEPS = [
+  ['📥', 'Ingest', 'Drop in GitHub, Slack and Jira exports. Offline files only, with clear errors if one is empty or corrupt.',
+    `<span class="cm"># what goes in</span>\ngithub.json   <span class="cm">commits, PRs, branches</span>\nslack.json    <span class="cm">#payflow-dev, 9 messages</span>\njira.csv      <span class="cm">5 tickets</span>\n\n<span class="kw">→</span> 30+ evidence units parsed`],
+  ['🛡️', 'Mask secrets', 'Keys, tokens and passwords are redacted <b>before</b> anything is parsed or stored. The secret itself is never written down.',
+    `<span class="cm"># before</span>\nSTRIPE_SECRET_KEY=sk_live_51Hx…\n<span class="cm"># after (what is stored)</span>\nSTRIPE_SECRET_KEY=<span class="st">[REDACTED:stripe_key]</span>`],
+  ['🔎', 'Extract and ground', 'Rules find decisions, unfinished work, bus-factor risks and contacts. A claim with no verbatim source quote is dropped.',
+    `<span class="kw">claim</span>  Postgres is the database for ledger\n<span class="kw">trust</span>  SOURCE-BACKED\n<span class="kw">proof</span>  PR #70 → “Decided to keep <span class="hl">Postgres</span> as the\n        source of truth for the ledger…”\n<span class="cm"># no quote found in the source? claim dropped</span>`],
+  ['⚡', 'Review and resolve', 'Conflicts on a timeline, gaps with owners and due dates, 3 debrief questions, then approve, reject or edit every claim.',
+    `<span class="kw">CONFLICT</span>  webhooks / message broker\n  Redis  ● 2026-08-18  slack\n  Kafka  ● 2026-10-28  ticket PAY-142  <span class="st">★ newest</span>\n\n<span class="cm"># a human picks the current truth</span>`],
+  ['🧾', 'Release and sign off', 'Role-filtered release, a successor feedback loop, then a receipt co-signed by the manager with a SHA-256 fingerprint.',
+    `leaver    <span class="st">✓</span> locked and released\nsuccessor <span class="st">✓</span> acknowledged\nmanager   <span class="st">✓</span> co-signed\n\nsha256 <span class="cm">9f2c…e41a</span>  <span class="cm"># of exactly what was handed over</span>`]
+];
+const L_TECH = [
+  ['Redact', 'app/scrubber.py', `<span class="kw">for</span> kind, rx <span class="kw">in</span> PATTERNS:\n    out = rx.sub(<span class="kw">lambda</span> m: f<span class="st">"[REDACTED:{kind}]"</span>, out)\n\n<span class="cm"># runs on every string BEFORE parsing or storage</span>`, 'Why it is hard: secrets hide in commit messages, PR bodies, chat and ticket comments. We scrub the raw JSON/CSV tree recursively so nothing slips through.'],
+  ['Ground', 'app/extract.py', `<span class="kw">if</span> _n(c.quote) <span class="kw">not in</span> _n(src[<span class="st">"text"</span>]):\n    dropped += 1      <span class="cm"># no verbatim quote, no claim</span>\n    <span class="kw">return</span> <span class="kw">None</span>`, 'Why it is hard: every claim must be provable. A Pydantic validator rejects claims without a quote, and a grounding check confirms the quote really appears in the cited source.'],
+  ['Conflict', 'app/extract.py', `groups[(component, attribute)].append(c)\nconflict = len({i[<span class="st">"value"</span>] <span class="kw">for</span> i <span class="kw">in</span> items}) >= 2\nbest = max(items, key=<span class="kw">lambda</span> i: rank(i[<span class="st">"s"</span>]))\n<span class="cm"># commit > PR > ticket > chat, newest wins the suggestion</span>`, 'Why it is hard: Slack says Redis, a ticket says Kafka. We suggest a winner by source weight and recency, but a human decides.'],
+  ['Enforce', 'app/main.py', `<span class="kw">def</span> visible(row, role, scope=<span class="kw">None</span>):\n    <span class="kw">if</span> role <span class="kw">in</span> FULL: <span class="kw">return True</span>\n    <span class="kw">if</span> row[<span class="st">"status"</span>] != <span class="st">"approved"</span> <span class="kw">or</span> row[<span class="st">"visibility"</span>] != <span class="st">"all"</span>:\n        <span class="kw">return False</span>\n    <span class="kw">if</span> role == <span class="st">"contractor"</span>: <span class="kw">return</span> row[<span class="st">"component"</span>] <span class="kw">in</span> scope\n    <span class="kw">return True</span>`, 'Why it is hard: access control lives on the server, signed by role PIN tokens, so hiding a button is never the only protection.'],
+  ['Fingerprint', 'app/main.py', `blob = json.dumps([[r[<span class="st">"id"</span>], r[<span class="st">"component"</span>], r[<span class="st">"t"</span>], r[<span class="st">"quote"</span>]]\n                   <span class="kw">for</span> r <span class="kw">in</span> rows])\n<span class="kw">return</span> hashlib.sha256(blob.encode()).hexdigest()\n<span class="cm"># tamper-evident proof of what was handed over</span>`, 'Why it is hard: a signed handover should be provable. The fingerprint covers exactly the claims the successor received.']
+];
+const L_FEATS = [
+  ['🛡️', 'Secrets masked first', 'AWS, Stripe, GitHub, Slack, Google keys, JWTs and passwords are redacted before storage. The report never keeps the secret.'],
+  ['🔎', 'A receipt for every claim', 'Each claim links to a verbatim quote. Open the source and the proof is highlighted. No quote, no claim.'],
+  ['📡', 'Temporal conflict radar', 'Decisions and mentions on one timeline. See who spoke last, and whether the older option is still being discussed.', 1],
+  ['🧭', 'Gap tracker', 'Every unknown moves Open, Assigned, Answered, Verified, with an owner and a due date. Nothing is forgotten after release.', 1],
+  ['🧰', 'Four roles, server-enforced', 'Leaver, manager, successor and a contractor tier limited to the components you grant. PIN-signed tokens on every request.', 1],
+  ['📜', 'Audit trail', 'An append-only log of every approval, rejection, edit, visibility change and release, with old and new values and CSV export.', 1],
+  ['🗣️', 'Successor feedback loop', 'Flag anything wrong or unclear after release. The leaver answers, the successor accepts, and only then can they sign off.', 1],
+  ['🧾', 'Co-signed handover receipt', 'Successor acknowledges, manager co-signs, and you get a printable receipt with a SHA-256 fingerprint of the content.', 1]
+];
+function landingHtml() {
+  const signed = Object.keys(S.tokens).length > 0;
+  return `<div class="l-wrap l-hero pt-10 md:pt-16 pb-10 grid lg:grid-cols-2 gap-10 items-center">
+    <div class="reveal in">
+      <span class="l-pill">✨ CodeFrontier Round 3 · Team TwinTech</span>
+      <h1 class="mt-4">Hand over a project <span class="grad">without the chat archaeology.</span></h1>
+      <p class="mt-4 text-lg l-sub">RelayTrace rebuilds what a leaving engineer knows from GitHub, Slack and Jira, and attaches a <b style="color:var(--fg)">receipt</b> to every claim: the original quote, one click away.</p>
+      <div class="mt-6 flex flex-wrap gap-3">
+        <button class="l-cta" data-act="demo">▶ Open live demo</button>
+        <button class="l-ghost" data-act="tourDemo">🎬 60-second tour</button>
+        <a class="l-ghost" href="https://github.com/ityshreee/relaytrace" target="_blank" rel="noopener">⌥ GitHub repo</a>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-2 text-xs">
+        <span class="l-pill">No sign-up: one click enters the demo</span><span class="l-pill">🔐 Secrets never stored</span><span class="l-pill">🔎 Every claim proven</span></div>
+      ${signed ? '<button class="mt-4 text-sm underline" style="color:var(--muted)" data-act="backToApp">← Continue where you left off</button>' : ''}
+    </div>
+    <div class="relative reveal in" style="padding:20px 10px">
+      <div data-tilt class="relative">
+        <div class="mock">
+          <div class="mock-bar"><i></i><i></i><i></i><span>relaytrace · PayFlow-Core · handover from arjun</span></div>
+          <div class="mock-body">
+            <div class="mrow"><span class="mb mb-src">✅ SOURCE-BACKED</span><span>Postgres is the database for ledger</span><span class="mpill">🔎 pr · PR #70</span></div>
+            <div class="mrow" style="display:block"><div style="font-size:12px;color:var(--muted)">“Decided to keep <mark>Postgres</mark> as the source of truth for the ledger…”</div></div>
+            <div class="mrow"><span class="mb mb-conf">⚡ CONFLICT</span><span>Redis or Kafka?</span><span class="mpill">★ newest: Kafka</span></div>
+            <div style="position:relative;height:74px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(135deg,rgba(15,23,42,.9),rgba(30,27,75,.9));overflow:visible">
+              <div style="position:absolute;left:14px;right:14px;top:24px;height:1px;background:rgba(255,255,255,.2)"></div><div style="position:absolute;left:14px;right:14px;top:52px;height:1px;background:rgba(255,255,255,.2)"></div>
+              <span style="position:absolute;left:10px;top:6px;font-size:10px;color:#f472b6;font-weight:700">Redis</span><span style="position:absolute;left:10px;top:34px;font-size:10px;color:#818cf8;font-weight:700">Kafka</span>
+              ${[[22, 24, 16, '#f472b6'], [44, 24, 7, '#f472b6'], [66, 24, 7, '#f472b6'], [58, 52, 7, '#818cf8'], [76, 52, 16, '#818cf8'], [90, 52, 7, '#818cf8']].map(([x, y, s, c]) => `<i style="position:absolute;left:${x}%;top:${y}px;width:${s}px;height:${s}px;margin:-${s / 2}px;border-radius:99px;background:${c};box-shadow:0 0 14px ${c}"></i>`).join('')}</div>
+            <div class="mrow"><span class="mb mb-gap">❓ MISSING</span><span>Who owns production deployments?</span><span class="mpill">assigned → karan</span></div>
+            <div class="mrow"><span class="mb mb-inf">🧮 INFERRED</span><span>auth/tokens.py: only arjun, 7 commits</span></div>
+          </div>
+        </div>
+        <div class="float-chip" style="left:-26px;top:-30px">🛡️ 3 secrets masked</div>
+        <div class="float-chip" style="right:-14px;bottom:-12px">🧾 co-signed · sha256 9f2c…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="l-wrap py-10 reveal"><div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    ${[['3', 'sources in', 'GitHub · Slack · Jira'], ['0', 'secrets stored', 'masked before storage'], ['100%', 'claims with quotes', 'or they are dropped'], ['4', 'server-enforced roles', 'leaver · manager · successor · contractor']].map(([n, a, b]) =>
+      `<div class="l-card text-center"><div class="text-4xl font-extrabold grad">${n}</div><div class="font-semibold mt-1">${a}</div><p>${b}</p></div>`).join('')}</div></div>
+
+  <div id="l-how" class="l-wrap py-12 reveal">
+    <h2 class="l-h2">How a handover flows</h2><p class="l-sub mt-2">Five steps from messy exports to a signed, provable handover. Click a step.</p>
+    <div class="mt-6 grid lg:grid-cols-5 gap-4"><div class="lg:col-span-2 space-y-1">${L_STEPS.map((s, i) => `<button class="l-tab ${i === 0 ? 'on' : ''}" data-lstep="${i}"><span class="l-num">${i + 1}</span><span><b>${s[0]} ${s[1]}</b></span></button>`).join('')}</div>
+      <div class="lg:col-span-3"><div class="l-card" style="min-height:250px"><div id="lstepTitle" class="font-bold text-lg"></div><p id="lstepText" class="mt-1"></p><div id="lstepCode" class="l-code mt-3"></div></div></div></div>
+  </div>
+
+  <div id="l-features" class="l-wrap py-12">
+    <div class="reveal"><h2 class="l-h2">Built to be trusted</h2><p class="l-sub mt-2">Everything a handover needs: proof, conflicts, ownership, access control and sign-off. <span class="l-new">ROUND 3</span> marks what we added in the final build.</p></div>
+    <div class="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">${L_FEATS.map(([i, t, d, n], k) => `<div class="l-card reveal" style="transition-delay:${(k % 4) * 70}ms"><div class="flex items-center justify-between"><span class="l-ico">${i}</span>${n ? '<span class="l-new">ROUND 3</span>' : ''}</div><h3>${t}</h3><p>${d}</p></div>`).join('')}</div>
+  </div>
+
+  <div class="l-wrap py-12 reveal">
+    <h2 class="l-h2">Five trust labels, in plain language</h2><p class="l-sub mt-2">Every claim says how it is known, so nobody has to guess.</p>
+    <div class="mt-5 grid sm:grid-cols-2 lg:grid-cols-5 gap-3">${Object.entries(TRUST_HELP).map(([k, [i, t]]) => `<div class="l-card"><span class="mb ${{'SOURCE-BACKED': 'mb-src', 'STATED BY LEAVER': 'mb-src', 'INFERRED': 'mb-inf', 'CONFLICT': 'mb-conf', 'MISSING EVIDENCE': 'mb-gap'}[k]}">${i} ${k}</span><p class="mt-2">${esc(t)}</p></div>`).join('')}</div>
+  </div>
+
+  <div id="l-tech" class="l-wrap py-12 reveal">
+    <h2 class="l-h2">Under the hood</h2><p class="l-sub mt-2">The hard parts, with the real code. No API keys, no rate limits, fully deterministic.</p>
+    <div class="mt-5 flex flex-wrap gap-2">${['Python 3.11', 'FastAPI', 'Pydantic v2', 'SQLite', 'Tailwind CSS', 'Vanilla JS', 'pytest', 'Render'].map(t => `<span class="badge-t">${t}</span>`).join('')}</div>
+    <div class="mt-5 grid lg:grid-cols-5 gap-4"><div class="lg:col-span-2 space-y-1">${L_TECH.map((s, i) => `<button class="l-tab ${i === 0 ? 'on' : ''}" data-ltech="${i}"><span class="l-num">${i + 1}</span><span><b>${s[0]}</b><br><span class="mono" style="font-size:11px;color:var(--muted)">${s[1]}</span></span></button>`).join('')}</div>
+      <div class="lg:col-span-3"><div id="ltechCode" class="l-code" style="min-height:170px"></div><p id="ltechWhy" class="mt-3 l-sub" style="font-size:14px"></p></div></div>
+  </div>
+
+  <div class="l-wrap py-14 reveal"><div class="l-card text-center" style="padding:40px 20px">
+    <h2 class="l-h2">See it in 60 seconds</h2><p class="l-sub mt-2 mx-auto">No account needed. Pick a role and explore, or let the tour walk you through.</p>
+    <div class="mt-5 flex flex-wrap justify-center gap-3"><button class="l-cta" data-act="demo">▶ Open live demo</button><button class="l-ghost" data-act="tourDemo">🎬 Guided tour</button></div>
+    <div class="mt-5 flex flex-wrap justify-center gap-2 text-sm">${['leaver', 'manager', 'successor', 'contractor'].map(r => `<button class="badge-t" data-act="enterRole" data-role="${r}">${ROLE_TILE[r][0]} ${ROLE_TILE[r][1]}</button>`).join('')}</div>
+    <p class="mt-4 text-xs" style="color:var(--muted)">Demo PINs: leaver 2468 · manager 1357 · successor 9753 · contractor 8642. Successor and contractor views unlock after the leaver releases (use <b>⚡ Fast-forward</b> in the leaver view).</p>
+  </div></div>
+  <footer class="l-wrap pb-10 text-center text-xs" style="color:var(--muted)">RelayTrace · Team TwinTech · CodeFrontier 2026 · built with FastAPI, Pydantic and SQLite</footer>`;
+}
+function renderLanding() {
+  $('#landing').innerHTML = landingHtml();
+  landStep(0); landTech(0);
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), {threshold: .12});
+  document.querySelectorAll('#landing .reveal').forEach(el => io.observe(el));
+}
+function landStep(i) {
+  const s = L_STEPS[i]; $('#lstepTitle').innerHTML = s[0] + ' ' + s[1]; $('#lstepText').innerHTML = s[2]; $('#lstepCode').innerHTML = s[3];
+  document.querySelectorAll('[data-lstep]').forEach(b => b.classList.toggle('on', +b.dataset.lstep === i));
+}
+function landTech(i) {
+  const s = L_TECH[i]; $('#ltechCode').innerHTML = s[2]; $('#ltechWhy').textContent = s[3];
+  document.querySelectorAll('[data-ltech]').forEach(b => b.classList.toggle('on', +b.dataset.ltech === i));
+}
+function showLanding(on) {
+  S.landing = on;
+  $('#landing').style.display = on ? 'block' : 'none'; $('main').style.display = on ? 'none' : 'block'; $('#hdrApp').style.display = on ? 'none' : 'flex';
+  const tb = document.querySelector('#hdr [data-act=tour]'); if (tb && on) tb.textContent = '▶ Take the tour';
+  if (on) { renderLanding(); window.scrollTo(0, 0); }
+}
+async function enterDemo(role, after) {
+  await doLogin(role, PIN_HINT[role]);
+  if (!S.tokens[role]) { openLogin(role, true); return; }
+  if (after) setTimeout(after, 600);
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-lstep]'); if (a) landStep(+a.dataset.lstep);
+  const b = e.target.closest('[data-ltech]'); if (b) landTech(+b.dataset.ltech);
+});
+
+/* ---------- aurora background, glow and 3D tilt ---------- */
+function startAurora() {
+  const cv = $('#bg'); if (!cv) return; const ctx = cv.getContext('2d'); let w, h;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fit = () => { w = cv.width = Math.ceil(innerWidth / 4); h = cv.height = Math.ceil(innerHeight / 4); };
+  fit(); addEventListener('resize', fit);
+  const blobs = [{x: .15, y: .1, r: .6, c: '99,102,241', s: 3.5e-4}, {x: .88, y: .08, r: .55, c: '217,70,239', s: 3e-4}, {x: .75, y: .95, r: .6, c: '56,189,248', s: 2.7e-4}, {x: .08, y: .9, r: .5, c: '251,146,60', s: 3.2e-4}];
+  let raf;
+  const draw = now => {
+    const dark = document.documentElement.classList.contains('dark'); ctx.clearRect(0, 0, w, h);
+    blobs.forEach((b, i) => {
+      const x = (b.x + Math.sin(now * b.s + i) * .12) * w, y = (b.y + Math.cos(now * b.s * 1.3 + i * 2) * .12) * h, r = b.r * Math.max(w, h);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${b.c},${dark ? .26 : .20})`); g.addColorStop(1, `rgba(${b.c},0)`);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    });
+    if (!reduced && !document.hidden) raf = requestAnimationFrame(draw);
+  };
+  draw(0); document.addEventListener('visibilitychange', () => { if (!document.hidden && !reduced) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); } });
+  window.redrawAurora = () => draw(performance.now());
+}
+document.addEventListener('mousemove', e => {
+  const g = e.target.closest('.card,.l-card,#app section,form[data-login]');
+  if (g) { const r = g.getBoundingClientRect(); g.style.setProperty('--mx', (e.clientX - r.left) + 'px'); g.style.setProperty('--my', (e.clientY - r.top) + 'px'); }
+  const t = e.target.closest('[data-tilt]');
+  if (t) { const r = t.getBoundingClientRect(), px = (e.clientX - r.left) / r.width - .5, py = (e.clientY - r.top) / r.height - .5;
+    t.style.transform = `perspective(1000px) rotateX(${(-py * 9).toFixed(2)}deg) rotateY(${(px * 12).toFixed(2)}deg)`; }
+});
+document.addEventListener('mouseout', e => { const t = e.target.closest('[data-tilt]'); if (t && !t.contains(e.relatedTarget)) t.style.transform = ''; });
+function setTheme(dark) {
+  document.documentElement.classList.toggle('dark', dark);
+  try { localStorage.setItem('rt_theme', dark ? 'dark' : 'light'); } catch (e) {}
+  const b = $('#btnTheme'); if (b) b.textContent = dark ? '☀️' : '🌙';
+  if (window.redrawAurora) redrawAurora();
+}
+
 /* ---------- wiring ---------- */
 document.addEventListener('click', e => { const el = e.target.closest('[data-act]'); if (el) { if (el.dataset.act === 'toggle' && e.target.closest('button:not([data-act="toggle"])')) { const inner = e.target.closest('button'); if (inner.dataset.act === 'bulk') return act(inner); } act(el); } });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { endTour(); $('#dlg').style.display = 'none'; $('#modal').style.display = 'none'; if (!$('#loginClose').classList.contains('hidden')) $('#login').style.display = 'none'; } });
 $('#roleSel').onchange = e => switchRole(e.target.value);
-$('#btnOut').onclick = () => { S.tokens = {}; saveTokens(); S.data = null; $('#app').innerHTML = ''; openLogin('leaver', false); };
+$('#btnOut').onclick = () => { S.tokens = {}; saveTokens(); S.data = null; $('#app').innerHTML = ''; showLanding(true); };
+$('#btnTheme').onclick = () => setTheme(!document.documentElement.classList.contains('dark'));
 $('#loginClose').onclick = () => { $('#login').style.display = 'none'; $('#roleSel').value = S.role; };
 $('#projSel').onchange = e => { S.pid = e.target.value; S.selSource = null; loadDossier(); };
 $('#btnDemo').onclick = createDemo;
@@ -647,9 +1252,10 @@ $('#upForm').onsubmit = async e => {
   catch (err) { toast(err.message, true); }
 };
 (async () => {
-  const have = ['leaver', 'manager', 'successor'].find(r => S.tokens[r]);
-  if (!have) { openLogin('leaver', false); return; }
-  S.role = have; $('#roleSel').value = have;
+  const have = ['leaver', 'manager', 'successor', 'contractor'].find(r => S.tokens[r]);
+  setTheme(document.documentElement.classList.contains('dark')); startAurora();
+  if (!have) { showLanding(true); return; }
+  showLanding(false); S.role = have; $('#roleSel').value = have;
   await loadProjects(); await loadDossier();
 })();
 </script>
