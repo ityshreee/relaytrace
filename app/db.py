@@ -27,7 +27,19 @@ CREATE TABLE IF NOT EXISTS events(
   claim_id INTEGER, summary TEXT, old TEXT, new TEXT);
 CREATE TABLE IF NOT EXISTS redactions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, kind TEXT, location TEXT);
+CREATE TABLE IF NOT EXISTS scope(
+  project_id INTEGER, component TEXT, PRIMARY KEY(project_id, component));
+CREATE TABLE IF NOT EXISTS feedback(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, claim_id INTEGER, kind TEXT, note TEXT,
+  author TEXT, status TEXT DEFAULT 'open', created TEXT, reply TEXT, replied_by TEXT, replied_at TEXT);
+CREATE TABLE IF NOT EXISTS receipts(
+  project_id INTEGER PRIMARY KEY, s_ack_at TEXT, s_note TEXT, m_ack_at TEXT, m_note TEXT);
 """
+
+# Columns added after the first release; applied to older databases on start-up.
+MIGRATIONS = {
+    "claims": [("gap_state", "TEXT"), ("gap_owner", "TEXT"), ("gap_due", "TEXT")],
+}
 
 
 @contextmanager
@@ -47,3 +59,8 @@ def get_conn():
 def init_db():
     with get_conn() as c:
         c.executescript(SCHEMA)
+        for table, cols in MIGRATIONS.items():
+            have = {r["name"] for r in c.execute(f"PRAGMA table_info({table})")}
+            for name, typ in cols:
+                if name not in have:
+                    c.execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
